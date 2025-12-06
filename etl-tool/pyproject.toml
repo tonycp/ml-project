@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "advanced-alchemy>=1.8.0",
+    "dataclass-mapper>=1.9.3",
+    "dataclasses>=0.8",
     "dependency-injector>=4.48.3",
     "psycopg[binary,pool]>=3.3.1",
     "pydantic>=2.12.5",
