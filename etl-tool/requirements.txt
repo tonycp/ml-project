@@ -1,0 +1,15 @@
+pydantic                        # Validación y parsing de datos
+pydantic-settings               # Configuración tipada
+pydantic-settings-Logging       # Integración de logging para pydantic-settings
+
+dependency-injector             # Contenedor de dependencias
+
+sqlalchemy                      # ORM base
+advanced-alchemy                # Integraciones sobre SQLAlchemy / patterns
+
+pyodbc                          # Conector SQL Server vía ODBC
+psycopg[binary,pool]            # Cliente PostgreSQL moderno
+
+pytest                          # Tests
+pytest-cov                      # Cobertura (opcional)
+pytest-mock                     # Mocks para tests (opcional)

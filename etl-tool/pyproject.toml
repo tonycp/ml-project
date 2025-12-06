@@ -1,0 +1,20 @@
+[project]
+name = "etl-tool"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "advanced-alchemy>=1.8.0",
+    "dependency-injector>=4.48.3",
+    "psycopg[binary,pool]>=3.3.1",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "pydantic-settings-logging>=0.1.1",
+    "pyodbc>=5.3.0",
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
+    "python-dotenv>=1.2.1",
+    "sqlalchemy>=2.0.44",
+]
