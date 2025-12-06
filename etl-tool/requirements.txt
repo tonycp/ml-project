@@ -1,15 +1,16 @@
-pydantic                        # Validación y parsing de datos
-pydantic-settings               # Configuración tipada
-pydantic-settings-Logging       # Integración de logging para pydantic-settings
+pydantic>=2.12.5                        # Validación y parsing de datos
+pydantic-settings>=2.12.0               # Configuración tipada
+pydantic-settings-logging>=0.1.1        # Integración de logging para pydantic-settings
 
-dependency-injector             # Contenedor de dependencias
+dependency-injector>=4.48.3             # Contenedor de dependencias
+python-dotenv>=1.2.1                    # Carga de variables de entorno desde .env
 
-sqlalchemy                      # ORM base
-advanced-alchemy                # Integraciones sobre SQLAlchemy / patterns
+sqlalchemy>=2.0.44                      # ORM base
+advanced-alchemy>=1.8.0                 # Integraciones sobre SQLAlchemy / patterns
 
-pyodbc                          # Conector SQL Server vía ODBC
-psycopg[binary,pool]            # Cliente PostgreSQL moderno
+pyodbc>=5.3.0                           # Conector SQL Server vía ODBC
+psycopg[binary,pool]>=3.3.1             # Cliente PostgreSQL moderno
 
-pytest                          # Tests
-pytest-cov                      # Cobertura (opcional)
-pytest-mock                     # Mocks para tests (opcional)
+pytest>=9.0.1                           # Tests
+pytest-cov>=7.0.0                       # Cobertura (opcional)
+pytest-mock>=3.15.1                     # Mocks para tests (opcional)
