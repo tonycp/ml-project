@@ -1,0 +1,22 @@
+# Configuración de ejemplo para db-tool
+# Copia este archivo a config.yml y ajusta los valores
+
+database:
+  username: sa
+  password: Meteorology2025!
+  default_database: master
+  connection_timeout: 300
+  health_check_timeout: 120
+  health_check_interval: 1
+
+paths:
+  data_dir: .data
+  logs_dir: .data/logs
+  backup_dir: backup
+  setup_dir: backup/start
+  compose_file: docker-compose.yml
+
+loader:
+  batch_size: 100
+  max_workers: 5
+  docker_startup_wait: 5

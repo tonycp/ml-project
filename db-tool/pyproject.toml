@@ -1,0 +1,23 @@
+[project]
+name = "db-tool"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.7.1",
+    "pyyaml>=6.0.3",
+    "rich>=14.2.0",
+    "sqlparse>=0.5.4",
+]
+
+[project.scripts]
+main = "db_tool.main:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["db_tool", "loader", "progress"]

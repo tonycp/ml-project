@@ -1,0 +1,97 @@
+services:
+  init-data:
+    image: alpine:3.18
+    command: ["sh", "-c", "chown -R 10001:0 /data || true; chmod -R 777 /data || true; touch /data/.init_done || true"]
+    volumes:
+      - ./.data:/data
+    restart: "no"
+
+  varadero:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Meteorology2025!
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./.data/varadero:/var/opt/mssql/data
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c '(echo > /dev/tcp/127.0.0.1/1433) >/dev/null 2>&1 || exit 1'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+    depends_on:
+      - init-data
+
+  casablanca_2020:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Meteorology2025!
+    ports:
+      - "1434:1433"
+    volumes:
+      - ./.data/cb_2020:/var/opt/mssql/data
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c '(echo > /dev/tcp/127.0.0.1/1433) >/dev/null 2>&1 || exit 1'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+    depends_on:
+      - init-data
+
+  casablanca_2021:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Meteorology2025!
+    ports:
+      - "1435:1433"
+    volumes:
+      - ./.data/cb_2021:/var/opt/mssql/data
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c '(echo > /dev/tcp/127.0.0.1/1433) >/dev/null 2>&1 || exit 1'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+    depends_on:
+      - init-data
+    
+  casablanca_2022:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Meteorology2025!
+    ports:
+      - "1436:1433"
+    volumes:
+      - ./.data/cb_2022:/var/opt/mssql/data
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c '(echo > /dev/tcp/127.0.0.1/1433) >/dev/null 2>&1 || exit 1'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+    depends_on:
+      - init-data
+    
+  casablanca_2022-2025:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: Meteorology2025!
+    ports:
+      - "1437:1433"
+    volumes:
+      - ./.data/cb_2022-2025:/var/opt/mssql/data
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash -c '(echo > /dev/tcp/127.0.0.1/1433) >/dev/null 2>&1 || exit 1'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 45s
+    depends_on:
+      - init-data
