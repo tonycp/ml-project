@@ -32,17 +32,17 @@ Notas:
 
 ## Instalación de dependencias (mínimas)
 
-Si usas un entorno virtual con fish:
+Si usas un entorno virtual con sh:
 
-```fish
-python -m venv .venv
-source .venv/bin/activate.fish
+```sh
+uv main .venv
+source .venv/bin/activate.sh
 pip install sqlparse
 ```
 
 Si tu `pyproject.toml` ya lista dependencias, también puedes:
 
-```fish
+```sh
 pip install -e .
 ```
 
@@ -121,14 +121,14 @@ Para añadir una nueva base de datos:
 
 Ubícate en el directorio `db-tool/` y ejecuta:
 
-```fish
-python -m db_tool load
+```sh
+uv main load
 ```
 
 O simplemente:
 
-```fish
-python -m db_tool
+```sh
+uv main
 ```
 
 ### Comandos disponibles
@@ -139,8 +139,8 @@ python -m db_tool
 
 ### Opciones de línea de comandos
 
-```fish
-python -m db_tool load [opciones]
+```sh
+uv main load [opciones]
 ```
 
 **Opciones disponibles:**
@@ -168,33 +168,39 @@ python -m db_tool load [opciones]
 ### Ejemplos
 
 **Carga normal:**
-```fish
-python -m db_tool load
+
+```sh
+uv main load
 ```
 
 **Cargar solo una base de datos:**
-```fish
-python -m db_tool load --service varadero
+
+```sh
+uv main load --service varadero
 ```
 
 **Reanudar una base específica desde el 50%:**
-```fish
-python -m db_tool load --service casablanca_2020 --start-percent 50
+
+```sh
+uv main load --service casablanca_2020 --start-percent 50
 ```
 
 **Reanudar desde el 50%:**
-```fish
-python -m db_tool load --start-percent 50
+
+```sh
+uv main load --start-percent 50
 ```
 
 **Lotes más grandes con menos workers:**
-```fish
-python -m db_tool load --batch-size 200 --max-workers 3
+
+```sh
+uv main load --batch-size 200 --max-workers 3
 ```
 
 **Usar configuración personalizada:**
-```fish
-python -m db_tool load -c production.yml
+
+```sh
+uv main load -c production.yml
 ```
 
 ### Flujo de ejecución
@@ -209,7 +215,7 @@ python -m db_tool load -c production.yml
 
 **Salida esperada:**
 
-```
+``` out
 ✅ Todas las DBs cargadas exitosamente
 ```
 
