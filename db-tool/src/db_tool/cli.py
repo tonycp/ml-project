@@ -14,12 +14,16 @@ import sys
 class CLI:
     """Command Line Interface principal"""
 
-    def __init__(self, config_path: str | Path | None = None):
+    def __init__(self, config_path: str | Path | None = None, start_percent: float = 0.0, batch_size: int | None = None, max_workers: int | None = None, service_filter: str | None = None):
         """
         Inicializa CLI con configuración
 
         Args:
             config_path: Ruta a config.yml. Si None, usa defaults + .env
+            start_percent: Porcentaje desde donde reanudar (0-100)
+            batch_size: Número de sentencias por lote (override config)
+            max_workers: Número máximo de workers paralelos (override config)
+            service_filter: Nombre de servicio específico a cargar (None = todos)
         """
         if config_path and Path(config_path).exists():
             self.config = AppConfig.from_yaml(config_path)
@@ -32,6 +36,10 @@ class CLI:
                 self.config = AppConfig()
 
         self.console = Console()
+        self.start_percent = start_percent
+        self.batch_size = batch_size
+        self.max_workers = max_workers
+        self.service_filter = service_filter
 
     def run(self, command: str = "load"):
         """Ejecuta comando especificado"""
@@ -76,21 +84,38 @@ class CLI:
             self.console.print()
 
     def cmd_load(self):
-        """Carga todas las bases de datos"""
+        """Carga todas las bases de datos (o una específica si se filtró)"""
         loader = DatabaseLoader(self.config)
         loader.setup()
 
-        with create_progress_ui(self.console) as progress:
-            tasks = {name: progress.add_task(name, total=0) for name in loader.services}
+        # Filtrar servicios si se especificó uno
+        services_to_load = loader.services
+        if self.service_filter:
+            if self.service_filter not in loader.services:
+                self.console.print(f"[red]Error: Servicio '{self.service_filter}' no encontrado[/red]")
+                self.console.print(f"[yellow]Servicios disponibles:[/yellow] {', '.join(loader.services.keys())}")
+                sys.exit(1)
+            services_to_load = {self.service_filter: loader.services[self.service_filter]}
+            self.console.print(f"[cyan]Cargando solo: {self.service_filter}[/cyan]\n")
 
-            with ThreadPoolExecutor(
-                max_workers=self.config.loader.max_workers
-            ) as executor:
+        # Usa parámetros CLI o defaults del config
+        batch_size = self.batch_size if self.batch_size is not None else self.config.loader.batch_size
+        max_workers = self.max_workers if self.max_workers is not None else self.config.loader.max_workers
+
+        with create_progress_ui(self.console) as progress:
+            tasks = {name: progress.add_task(name, total=0) for name in services_to_load}
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(
-                        loader.load_database, name, progress, tasks[name]
+                        loader.load_database,
+                        name,
+                        progress,
+                        tasks[name],
+                        batch_size,
+                        self.start_percent,
                     ): name
-                    for name in loader.services
+                    for name in services_to_load
                 }
 
                 results = {}

@@ -84,7 +84,7 @@ class DatabaseLoader:
         for name, service in self.services.items():
             self.trackers[name] = ProgressTracker(name, service.sql_file)
 
-    def load_database(self, service_name: str, progress=None, task_id=None) -> bool:
+    def load_database(self, service_name: str, progress=None, task_id=None, batch_size: int | None = None, start_percent: float = 0.0) -> bool:
         """
         Carga una base de datos específica
 
@@ -92,12 +92,17 @@ class DatabaseLoader:
             service_name: Nombre del servicio a cargar
             progress: Objeto de progreso Rich (opcional)
             task_id: ID de tarea Rich (opcional)
+            batch_size: Tamaño de lote (override config, opcional)
+            start_percent: Porcentaje desde donde reanudar (0-100, default: 0)
 
         Returns:
             True si la carga fue exitosa
         """
         service = self.services[service_name]
         tracker = self.trackers[service_name]
+
+        # Usar batch_size especificado o del config
+        effective_batch_size = batch_size if batch_size is not None else self.config.loader.batch_size
 
         # Crear dependencias (DI)
         health_checker = SocketHealthChecker()
@@ -125,7 +130,7 @@ class DatabaseLoader:
 
             # Cargar datos
             return self._load_data(
-                service, tracker, executor, parser, logger, progress, task_id
+                service, tracker, executor, parser, logger, progress, task_id, effective_batch_size, start_percent
             )
 
         except Exception as e:
@@ -142,21 +147,34 @@ class DatabaseLoader:
         logger: ILogger,
         progress,
         task_id,
+        batch_size: int,
+        start_percent: float = 0.0,
     ) -> bool:
         """Carga datos desde archivo SQL"""
-        # Inicializar progreso
+        # Inicializar progreso con start_percent
         if progress is not None and task_id is not None:
-            self._update_progress(progress, task_id, total=100)
+            self._update_progress(progress, task_id, total=100, completed=int(start_percent))
+
+        tracker.update(start_percent, "loading")
 
         batch = []
         batch_index = 0
-        last_progress_value = 0
+        last_progress_value = start_percent
+        skipping = start_percent > 0
 
         # Procesar statements
         for stmt, pct in parser.parse(service.sql_file):
+            # Saltar statements hasta alcanzar start_percent
+            if skipping:
+                if pct < start_percent:
+                    continue
+                else:
+                    skipping = False
+                    logger.log(f"Reanudando desde {start_percent}% (statement en {pct}%)", "info")
+
             batch.append(stmt)
 
-            if len(batch) < self.config.loader.batch_size:
+            if len(batch) < batch_size:
                 continue
 
             # Ejecutar batch

@@ -117,24 +117,100 @@ Para añadir una nueva base de datos:
 
 ## Uso
 
+### Uso básico
+
 Ubícate en el directorio `db-tool/` y ejecuta:
 
 ```fish
-python main.py
+python -m db_tool load
 ```
 
-El flujo es:
+O simplemente:
 
-1. Crear directorios `.data/` y `.data/logs/` si no existen.
-2. Ejecutar `docker-compose up -d` para levantar los servicios definidos en tu `docker-compose.yml`.
-3. Esperar que cada puerto declarado esté accesible.
-4. Leer el `.sql` de cada servicio, dividirlo en sentencias (respeta separadores `GO`) y ejecutar por lotes con `sqlcmd`.
-5. Mostrar progreso en vivo y escribir logs por servicio en `.data/logs/<servicio>.log`.
+```fish
+python -m db_tool
+```
 
-Salida esperada al finalizar:
+### Comandos disponibles
 
-``` txt
-✅ Todas las DBs cargadas en .data/*
+- `load` (default): Carga todas las bases de datos
+- `setup`: Solo inicializa directorios y Docker Compose
+- `list`: Lista servicios disponibles
+
+### Opciones de línea de comandos
+
+```fish
+python -m db_tool load [opciones]
+```
+
+**Opciones disponibles:**
+
+- `--service NOMBRE`: Cargar solo un servicio específico
+  - Ejemplo: `--service varadero` o `--service casablanca_2020`
+  - Si no se especifica, carga todas las bases de datos
+  - Si el servicio no existe, muestra error y lista disponibles
+
+- `--start-percent PERCENT`: Reanudar desde un porcentaje específico (0-100)
+  - Ejemplo: `--start-percent 25.5` continúa desde el 25.5%
+  - Útil para reanudar cargas interrumpidas
+  
+- `--batch-size N`: Número de sentencias SQL por lote (override config)
+  - Ejemplo: `--batch-size 150`
+  - Default: valor del config (normalmente 100)
+  
+- `--max-workers N`: Número máximo de workers paralelos (override config)
+  - Ejemplo: `--max-workers 3`
+  - Default: valor del config (normalmente 5)
+
+- `-c, --config PATH`: Ruta a archivo de configuración YAML alternativo
+  - Ejemplo: `-c custom-config.yml`
+
+### Ejemplos
+
+**Carga normal:**
+```fish
+python -m db_tool load
+```
+
+**Cargar solo una base de datos:**
+```fish
+python -m db_tool load --service varadero
+```
+
+**Reanudar una base específica desde el 50%:**
+```fish
+python -m db_tool load --service casablanca_2020 --start-percent 50
+```
+
+**Reanudar desde el 50%:**
+```fish
+python -m db_tool load --start-percent 50
+```
+
+**Lotes más grandes con menos workers:**
+```fish
+python -m db_tool load --batch-size 200 --max-workers 3
+```
+
+**Usar configuración personalizada:**
+```fish
+python -m db_tool load -c production.yml
+```
+
+### Flujo de ejecución
+
+1. Crear directorios `.data/` y `.data/logs/` si no existen
+2. Ejecutar `docker-compose up -d` para levantar servicios
+3. Esperar que cada puerto esté accesible
+4. Leer y parsear archivos `.sql` (respeta separadores `GO`)
+5. Ejecutar sentencias por lotes con `sqlcmd`
+6. Mostrar progreso en vivo con barras Rich
+7. Escribir logs detallados en `.data/logs/<servicio>.log`
+
+**Salida esperada:**
+
+```
+✅ Todas las DBs cargadas exitosamente
 ```
 
 Si hubo errores, se listarán por servicio y el detalle completo quedará en su archivo de log.
