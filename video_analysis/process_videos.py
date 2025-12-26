@@ -3,6 +3,7 @@ import re
 import os
 from datetime import datetime
 from opensky_verificator_api import OpenSkyAvionChecker
+from flightaware_scraper import FlightAwareScraper
 from paddleocr import PaddleOCR
 import cv2
 
@@ -31,7 +32,7 @@ def extract_datetime_from_filename(video_path):
         filename = os.path.basename(video_path)
         
         # Patrón para extraer la primera fecha y hora: YYYY-MM-DDTHH_MM_SSZ
-        pattern = r'(\d{4}-\d{2}-\d{2})T(\d{2})_(\d{2})_(\d{2})Z'
+        pattern = r'(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})Z'
         match = re.search(pattern, filename)
         
         if match:
@@ -367,62 +368,125 @@ def process_video_with_opensky_substrings(video_path, checker, frames_per_second
     
     return aviones_detectados
 
-# Función principal de ejemplo
-def main_video_processing():
+# Ejecutar si se llama directamente
+def process_video_with_flightaware(video_path: str, frames_per_second_to_process=1, output_csv='vuelos_detectados.csv'):
     """
-    Ejemplo de uso de procesamiento de video con OpenSky
+    Procesa video con OCR, busca códigos de vuelo en FlightAware y guarda resultados en CSV
+    
+    Args:
+        video_path: ruta del video
+        frames_per_second_to_process: frames a procesar por segundo
+        output_csv: archivo CSV para guardar resultados
     """
-    print("🎥 PROCESADOR DE VIDEO CON DETECCIÓN DE AVIÓN")
-    print("=" * 50)
     
-    # Inicializar verificador
-    checker = OpenSkyAvionChecker()
+    # Inicializar el scraper de FlightAware
+    scraper = FlightAwareScraper()
     
-    # Cargar base de datos
-    print("📂 Cargando base de datos OpenSky...")
-    if not checker.cargar_base_datos('aircraftDatabase.csv'):
-        print("❌ No se pudo cargar la base de datos. Asegúrate de tener el archivo.")
-        return
+    # Extraer fecha y hora del nombre del archivo
+    video_date, video_time = extract_datetime_from_filename(video_path)
+    print(f"📅 Fecha del video: {video_date}, Hora: {video_time}")
     
-    # Solicitar ruta del video
-    video_path = input("\n📁 Ruta del video a procesar: ").strip()
-    if not video_path:
-        video_path = "video_ejemplo.mp4"  # Ruta por defecto
-    
-    # Procesar video
-    resultados = process_video_with_opensky(
-        video_path=video_path,
-        checker=checker,
-        frames_per_second_to_process=1,
-        output_csv='aviones_detectados.csv'
+    # 1. Procesar video con OCR
+    print(f"🎬 Procesando video: {video_path}")
+    resultados_ocr = extract_text_from_video(
+        video_path, 
+        frames_per_second_to_process=frames_per_second_to_process,
+        output_file='ocr_resultados.txt'  # Archivo temporal para OCR
     )
     
-    # Mostrar resumen final
-    print("\n" + "=" * 50)
-    print("🎬 PROCESAMIENTO COMPLETADO")
-    if resultados:
-        print(f"✅ Se detectaron {len(resultados)} aviones")
-        print(f"📄 Resultados guardados en: aviones_detectados.csv")
+    print(f"✅ OCR completado. Se procesaron {len(resultados_ocr)} frames")
+    
+    # 2. Preparar lista para resultados
+    vuelos_detectados = []
+    
+    # 3. Patrones para buscar códigos de vuelo en el texto OCR
+    patrones_vuelo = [
+        r'\b[A-Z]{2}\d{2,4}\b',      # Ej: BA223, AA1234
+        r'\b[A-Z]{3}\d{1,4}\b',      # Ej: IBE123, KLM45
+        r'\b[A-Z]\d{1,4}[A-Z]?\b',   # Ej: A123, B456C
+        r'\b[A-Z]{2,3}\s?\d{2,4}\b', # Ej: AA 123, BA 4567
+    ]
+    
+    # Compilar patrones para mejor rendimiento
+    regex_patrones = [re.compile(patron, re.IGNORECASE) for patron in patrones_vuelo]
+    
+    # 4. Procesar cada frame del OCR
+    for timestamp, frame_texts in resultados_ocr:
+        print(f"\n⏱️  Timestamp: {timestamp:.2f}s")
         
-        # Opción: Mostrar en vuelo actual
-        respuesta = input("\n¿Buscar aviones detectados en vuelo actual? (s/n): ").lower()
-        if respuesta == 's':
-            for avion in resultados:
-                if avion['icao24']:
-                    print(f"\n🔍 Buscando {avion['registration']} ({avion['icao24']})...")
-                    vuelos = checker.buscar_avion_en_vuelo(avion['icao24'])
-                    if vuelos:
-                        print(f"  ✈️  EN VUELO AHORA!")
-                        for vuelo in vuelos:
-                            print(f"  • Callsign: {vuelo['callsign']}")
-                            if vuelo['posicion']:
-                                lat, lon = vuelo['posicion']
-                                print(f"  • Posición: {lat:.4f}°, {lon:.4f}°")
+        # Unir todos los textos del frame
+        texto_completo = ' '.join(frame_texts)
+        
+        # Buscar posibles códigos de vuelo en el texto
+        posibles_codigos = set()
+        
+        for regex in regex_patrones:
+            matches = regex.findall(texto_completo)
+            for match in matches:
+                # Limpiar y normalizar el código (eliminar espacios y convertir a mayúsculas)
+                codigo = re.sub(r'\s+', '', match).upper()
+                if 3 <= len(codigo) <= 8:  # Filtrar códigos por longitud razonable
+                    posibles_codigos.add(codigo)
+        
+        print(f"  📝 Texto OCR: {texto_completo[:100]}...")
+        
+        if posibles_codigos:
+            print(f"  🔍 Candidatos encontrados: {', '.join(posibles_codigos)}")
+            
+            # Verificar cada código en FlightAware
+            for codigo in posibles_codigos:
+                print(f"  ✈️  Verificando vuelo: {codigo}")
+                
+                # Verificar en FlightAware
+                resultado = scraper.verificar_vuelo(codigo)
+                
+                if resultado and resultado.get('existe'):
+                    print(f"  ✅ Vuelo encontrado: {codigo}")
+                    print(f"  📊 Detalles: {resultado}")
+                    
+                    # Calcular fecha y hora reales sumando timestamp a la fecha/hora del video
+                    real_datetime = None
+                    real_date = video_date
+                    real_time = video_time
+                    
+                    if video_date and video_time:
+                        try:
+                            # Convertir fecha y hora del video a datetime
+                            video_datetime = datetime.strptime(f"{video_date} {video_time}", "%Y-%m-%d %H:%M:%S")
+                            # Sumar el timestamp del frame
+                            real_datetime = video_datetime + pd.Timedelta(seconds=timestamp)
+                            real_date = real_datetime.strftime("%Y-%m-%d")
+                            real_time = real_datetime.strftime("%H:%M:%S")
+                        except Exception as e:
+                            print(f"Error calculando fecha/hora real: {e}")
+
+
+                    # Agregar a la lista de vuelos detectados
+                    vuelo_info = {
+                        'codigo_vuelo': codigo,
+                        'date': real_date,
+                        'time': real_time,
+                        'aerolinea': resultado.get('aerolinea', 'Desconocida'),
+                        'origen': f"{resultado.get('origen', {}).get('codigo', '?')} - {resultado.get('origen', {}).get('ciudad', 'Desconocido')}",
+                        'destino': f"{resultado.get('destino', {}).get('codigo', '?')} - {resultado.get('destino', {}).get('ciudad', 'Desconocido')}",
+                    }
+                    
+                    vuelos_detectados.append(vuelo_info)
+    
+    # 5. Guardar resultados en CSV
+    if vuelos_detectados:
+        df = pd.DataFrame(vuelos_detectados)
+        df.to_csv(output_csv, index=False, encoding='utf-8')
+        print(f"\n✅ Resultados guardados en: {output_csv}")
+        print(f"📊 Total de vuelos detectados: {len(vuelos_detectados)}")
     else:
-        print("❌ No se detectaron aviones en el video")
+        print("\n⚠️  No se detectaron vuelos en el video.")
+    
+    return vuelos_detectados
+
 
 # Modificación en la función main original para incluir procesamiento de video
-def main_completo():
+def main_opensky():
     """
     Menú principal completo con opción de procesamiento de video
     """
@@ -515,11 +579,49 @@ def main_completo():
             # Búsqueda normal
             resultado = checker.verificar_matricula(comando)
 
-# Ejecutar si se llama directamente
+def main_flightaware():
+    """
+    Menú principal para procesar videos con FlightAware
+    """
+    print("""
+    ✈️  PROCESADOR DE VIDEOS CON FLIGHTAWARE
+    ======================================
+    Esta herramienta procesa videos, extrae texto con OCR
+    y verifica códigos de vuelo en FlightAware.
+    """)
+    
+    while True:
+        print("\n" + "="*50)
+        print("  MENÚ PRINCIPAL - FLIGHTAWARE")
+        print("="*50)
+        print("1. Procesar video")
+        print("2. Salir")
+        
+        opcion = input("\nSeleccione una opción: ").strip()
+        
+        if opcion == '1':
+            video_path = input("\nIngrese la ruta del video: ").strip('"')
+            if not os.path.exists(video_path):
+                print("❌ El archivo no existe. Intente nuevamente.")
+                continue
+                
+            try:
+                fps = float(input("Frames por segundo a procesar (recomendado: 1): ") or "1")
+                process_video_with_flightaware(video_path, frames_per_second_to_process=fps)
+            except Exception as e:
+                print(f"❌ Error al procesar el video: {str(e)}")
+                
+        elif opcion == '2':
+            print("\n¡Hasta luego! ✈️")
+            break
+            
+        else:
+            print("❌ Opción no válida. Intente nuevamente.")
+
 if __name__ == "__main__":
     # Puedes elegir qué función ejecutar:
     # main_completo()  # Para el menú interactivo completo
     # main_video_processing()  # Para procesamiento directo de video
     
-    print("🎬 Ejecutar main_completo() para menú interactivo con video")
-    print("🎥 Ejecutar main_video_processing() para procesar video directamente")
+    video_path = "/home/gabo/Personal/Work/Lita/Proyectos/VideoSearch/vid-chronicle-main/data/videos/TWR-HAV/2025/05/12/+0,0/2025-05-12T22:13:13Z_2025-05-12T22:28:13Z.mkv"
+    process_video_with_flightaware(video_path, frames_per_second_to_process=300)
