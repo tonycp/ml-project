@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import os
 from datetime import datetime
 from opensky_verificator_api import OpenSkyAvionChecker
 from paddleocr import PaddleOCR
@@ -11,6 +12,37 @@ ocr = PaddleOCR(
     use_doc_unwarping=False,
     use_textline_orientation=False,
     lang='en')
+
+def extract_datetime_from_filename(video_path):
+    """
+    Extrae la fecha y hora del nombre del archivo de video.
+    
+    Formato esperado: 2025-05-12T22_13_13Z_2025-05-12T22_28_13Z.mkv
+    Extrae la primera fecha y hora del nombre del archivo.
+    
+    Args:
+        video_path: ruta del archivo de video
+        
+    Returns:
+        tuple: (date_str, time_str) o (None, None) si no se puede extraer
+    """
+    try:
+        # Obtener solo el nombre del archivo
+        filename = os.path.basename(video_path)
+        
+        # Patrón para extraer la primera fecha y hora: YYYY-MM-DDTHH_MM_SSZ
+        pattern = r'(\d{4}-\d{2}-\d{2})T(\d{2})_(\d{2})_(\d{2})Z'
+        match = re.search(pattern, filename)
+        
+        if match:
+            date_str = match.group(1)  # YYYY-MM-DD
+            time_str = f"{match.group(2)}:{match.group(3)}:{match.group(4)}"  # HH:MM:SS
+            return date_str, time_str
+        
+        return None, None
+    except Exception as e:
+        print(f"Error extrayendo fecha del nombre del archivo: {e}")
+        return None, None
 
 def extract_text_from_video(video_path, frames_per_second_to_process=1, output_file='resultados.txt'):
     """
@@ -90,6 +122,10 @@ def process_video_with_opensky(video_path: str, checker: OpenSkyAvionChecker, fr
         output_csv: archivo CSV para guardar resultados
     """
     
+    # Extraer fecha y hora del nombre del archivo
+    video_date, video_time = extract_datetime_from_filename(video_path)
+    print(f"📅 Fecha del video: {video_date}, Hora: {video_time}")
+    
     # 1. Procesar video con OCR
     print(f"🎬 Procesando video: {video_path}")
     resultados_ocr = extract_text_from_video(
@@ -161,12 +197,28 @@ def process_video_with_opensky(video_path: str, checker: OpenSkyAvionChecker, fr
                     
                     # Para cada avión encontrado, agregar a la lista
                     for idx, avion in resultados_db.iterrows():
+                        # Calcular fecha y hora reales sumando timestamp a la fecha/hora del video
+                        real_datetime = None
+                        real_date = video_date
+                        real_time = video_time
+                        
+                        if video_date and video_time:
+                            try:
+                                # Convertir fecha y hora del video a datetime
+                                video_datetime = datetime.strptime(f"{video_date} {video_time}", "%Y-%m-%d %H:%M:%S")
+                                # Sumar el timestamp del frame
+                                real_datetime = video_datetime + pd.Timedelta(seconds=timestamp)
+                                real_date = real_datetime.strftime("%Y-%m-%d")
+                                real_time = real_datetime.strftime("%H:%M:%S")
+                            except Exception as e:
+                                print(f"Error calculando fecha/hora real: {e}")
+                        
                         # Extraer información relevante
                         info_avion = {
-                            'timestamp': timestamp,
-                            'timestamp_formateado': f"{int(timestamp//3600):02d}:{int((timestamp%3600)//60):02d}:{timestamp%60:06.3f}",
-                            'codigo_buscado': codigo,
+                            'codigo': codigo,
                             'icao24': avion.get('icao24', ''),
+                            'date': real_date,
+                            'time': real_time,
                             'registration': avion.get('registration', ''),
                             'manufacturericao': avion.get('manufacturericao', ''),
                             'manufacturername': avion.get('manufacturername', ''),
@@ -181,8 +233,9 @@ def process_video_with_opensky(video_path: str, checker: OpenSkyAvionChecker, fr
                         # (para evitar duplicados del mismo frame)
                         es_duplicado = False
                         for avion_existente in aviones_detectados:
-                            if (avion_existente['icao24'] == info_avion['icao24'] and 
-                                abs(avion_existente['timestamp'] - timestamp) < 1.0):
+                            if (avion_existente.get('icao24') == info_avion['icao24'] and 
+                                avion_existente.get('date') == info_avion.get('date') and
+                                avion_existente.get('time') == info_avion.get('time')):
                                 es_duplicado = True
                                 break
                         
@@ -299,7 +352,8 @@ def process_video_with_opensky_substrings(video_path, checker, frames_per_second
             }
             
             # Evitar duplicados
-            if not any(a['icao24'] == info_avion['icao24'] and 
+            if not any(a.get('icao24') == info_avion['icao24'] and 
+                      a.get('timestamp') is not None and
                       abs(a['timestamp'] - timestamp) < 1.0 
                       for a in aviones_detectados):
                 aviones_detectados.append(info_avion)

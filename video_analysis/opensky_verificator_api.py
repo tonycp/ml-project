@@ -99,15 +99,7 @@ class OpenSkyAvionChecker:
             # Buscar en ICAO24
             if 'icao24' in self.aircraft_df.columns:
                 masks.append(self.aircraft_df['icao24'].str.upper().str.contains(busqueda, na=False))
-            
-            # Buscar en modelo
-            if 'model' in self.aircraft_df.columns:
-                masks.append(self.aircraft_df['model'].str.upper().str.contains(busqueda, na=False))
-            
-            # Buscar en callsign del operador
-            if 'operatorcallsign' in self.aircraft_df.columns:
-                masks.append(self.aircraft_df['operatorcallsign'].str.upper().str.contains(busqueda, na=False))
-            
+           
             # Combinar todas las máscaras
             if masks:
                 combined_mask = masks[0]
@@ -290,6 +282,144 @@ class OpenSkyAvionChecker:
             print(f"❌ Error obteniendo historial: {str(e)}")
             return []
     
+    def buscar_vuelo_por_callsign(self, callsign, buscar_historico=False, horas_historia=24):
+        """
+        Busca vuelos por su código de vuelo (callsign) como 'BAW2203'.
+        
+        Args:
+            callsign (str): Código de vuelo a buscar (ej: 'BAW2203').
+            buscar_historico (bool): Si es True, también busca en vuelos históricos.
+            horas_historia (int): Horas hacia atrás para buscar en el historial.
+        
+        Returns:
+            dict: Diccionario con resultados de vuelos activos e históricos.
+        """
+        print(f"\n{'='*70}")
+        print(f"🔍 BUSCANDO VUELO POR CALLSIGN: {callsign}")
+        print('='*70)
+        
+        # Limpiar el callsign (sin espacios)
+        callsign_limpio = callsign.strip().upper()
+        resultados = {'activos': [], 'historicos': [], 'encontrado': False}
+        
+        # 1. BUSCAR EN VUELOS ACTIVOS (TIEMPO REAL)
+        print("\n1. 🛫 Consultando vuelos activos...")
+        try:
+            # Usar la API para obtener todos los estados actuales
+            states = self.api.get_states()
+            
+            if states and states.states:
+                vuelos_activos = []
+                for state in states.states:
+                    if state.callsign and state.callsign.strip().upper() == callsign_limpio:
+                        # Obtener matrícula del avión desde la base de datos
+                        matricula = self.obtener_matricula_de_icao(state.icao24) if self.db_loaded else None
+                        
+                        vuelo_info = {
+                            'callsign': state.callsign.strip(),
+                            'icao24': state.icao24,
+                            'matricula': matricula,
+                            'origen_pais': state.origin_country,
+                            'posicion': (state.latitude, state.longitude) if state.latitude else None,
+                            'altitud_barometrica': state.baro_altitude,
+                            'velocidad': state.velocity,
+                            'rumbo': state.true_track,
+                            'en_tierra': state.on_ground,
+                            'timestamp_posicion': datetime.fromtimestamp(state.time_position).isoformat() 
+                                                if state.time_position else None,
+                            'ultimo_contacto': datetime.fromtimestamp(state.last_contact).isoformat() 
+                                            if state.last_contact else None
+                        }
+                        vuelos_activos.append(vuelo_info)
+                
+                if vuelos_activos:
+                    print(f"   ✅ VUELO ENCONTRADO EN TIEMPO REAL ({len(vuelos_activos)} instancia(s))")
+                    for vuelo in vuelos_activos:
+                        print(f"\n   ✈️  Callsign: {vuelo['callsign']}")
+                        print(f"   📍 Posición: {vuelo['posicion'] if vuelo['posicion'] else 'No disponible'}")
+                        print(f"   🏷️  Matrícula: {vuelo['matricula'] or 'No disponible'}")
+                        print(f"   🏳️  País origen: {vuelo['origen_pais']}")
+                        print(f"   📈 Altitud: {vuelo['altitud_barometrica']:.0f}m" if vuelo['altitud_barometrica'] else "   📈 Altitud: No disponible")
+                        print(f"   🚀 Velocidad: {vuelo['velocidad']:.0f} m/s" if vuelo['velocidad'] else "   🚀 Velocidad: No disponible")
+                        print(f"   🧭 Rumbo: {vuelo['rumbo']:.0f}°" if vuelo['rumbo'] else "   🧭 Rumbo: No disponible")
+                        print(f"   ⏰ Última actualización: {vuelo['ultimo_contacto']}")
+                    
+                    resultados['activos'] = vuelos_activos
+                    resultados['encontrado'] = True
+                else:
+                    print(f"   ℹ️  No se encontró el vuelo {callsign_limpio} en vuelos activos.")
+            else:
+                print("   ℹ️  No hay datos de vuelos activos disponibles.")
+                
+        except Exception as e:
+            print(f"   ❌ Error consultando vuelos activos: {str(e)}")
+        
+        # 2. BUSCAR EN HISTORIAL (OPCIONAL - REQUIERE AUTENTICACIÓN)
+        if buscar_historico:
+            print(f"\n2. 📅 Consultando historial de últimas {horas_historia} horas...")
+            try:
+                # Calcular timestamps para el período histórico
+                fin = int(time.time())
+                inicio = fin - (horas_historia * 3600)
+                
+                # Obtener vuelos históricos
+                # NOTA: Este endpoint podría requerir autenticación para períodos largos
+                historial = self.api.get_flights_by_aircraft(
+                    icao24=None,  # No filtramos por avión específico
+                    begin=inicio,
+                    end=fin
+                )
+                
+                if historial:
+                    vuelos_historicos = []
+                    for flight in historial:
+                        if flight.callsign and flight.callsign.strip().upper() == callsign_limpio:
+                            vuelo_hist = {
+                                'callsign': flight.callsign.strip(),
+                                'primer_contacto': datetime.fromtimestamp(flight.firstSeen).isoformat(),
+                                'ultimo_contacto': datetime.fromtimestamp(flight.lastSeen).isoformat(),
+                                'aeropuerto_salida': flight.estDepartureAirport,
+                                'aeropuerto_llegada': flight.estArrivalAirport,
+                                'icao24': flight.icao24
+                            }
+                            vuelos_historicos.append(vuelo_hist)
+                    
+                    if vuelos_historicos:
+                        print(f"   ✅ {len(vuelos_historicos)} vuelo(s) histórico(s) encontrado(s)")
+                        for i, vuelo in enumerate(vuelos_historicos, 1):
+                            print(f"\n   🗓️  Vuelo histórico {i}:")
+                            print(f"   • Callsign: {vuelo['callsign']}")
+                            print(f"   • Aeropuerto salida: {vuelo['aeropuerto_salida'] or 'Desconocido'}")
+                            print(f"   • Aeropuerto llegada: {vuelo['aeropuerto_llegada'] or 'Desconocido'}")
+                            print(f"   • Horario: {vuelo['primer_contacto']} a {vuelo['ultimo_contacto']}")
+                            print(f"   • ICAO24: {vuelo['icao24']}")
+                        
+                        resultados['historicos'] = vuelos_historicos
+                        resultados['encontrado'] = True
+                    else:
+                        print(f"   ℹ️  No se encontró el vuelo {callsign_limpio} en el historial consultado.")
+                else:
+                    print("   ℹ️  No hay datos históricos disponibles para el período.")
+                    
+            except Exception as e:
+                print(f"   ❌ Error consultando historial: {str(e)}")
+                print("   💡 Nota: El acceso a datos históricos puede requerir autenticación.")
+        
+        # Resumen final
+        print(f"\n{'='*70}")
+        if resultados['encontrado']:
+            total = len(resultados['activos']) + len(resultados['historicos'])
+            print(f"✅ BÚSQUEDA COMPLETADA: {total} resultado(s) para '{callsign_limpio}'")
+        else:
+            print(f"❌ No se encontró información para el vuelo '{callsign_limpio}'")
+            print("\n💡 Posibles razones:")
+            print("   • El vuelo no está activo en este momento")
+            print("   • El código de vuelo podría haber cambiado (vuelos compartidos)")
+            print("   • El vuelo no pasó por la cobertura de la red OpenSky")
+            print("   • Para búsqueda histórica, necesita autenticación o el período es muy corto")
+        
+        return resultados
+        
     def verificar_matricula(self, entrada):
         """
         Verificación completa de una matrícula o callsign
@@ -502,7 +632,9 @@ if __name__ == "__main__":
     
     # Ejecutar interfaz principal
     try:
-        main()
+        checker = OpenSkyAvionChecker(username="gabrielpla-api-client", password="Iko6NSvhl0bZ0xJ3DrLkGjpBc7vqiiyd")
+        resultados = checker.buscar_vuelo_por_callsign("BAW2203", True, 720)
+        print(resultados)
     except KeyboardInterrupt:
         print("\n\n👋 Programa interrumpido por el usuario")
     except Exception as e:
