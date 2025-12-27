@@ -76,7 +76,9 @@ def extract_text_from_video(video_path, frames_per_second_to_process=1, output_f
     print(f"FPS del video: {fps:.2f}")
     print(f"Se procesará aproximadamente cada {frame_skip} frames para obtener {frames_per_second_to_process} frame(s) por segundo.")
 
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, 'a', encoding='utf-8') as f:
+        f.write(video_path + '\n')
+        
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -273,105 +275,11 @@ def process_video_with_opensky(video_path: str, checker: OpenSkyAvionChecker, fr
     
     return aviones_detectados
 
-# Función mejorada para buscar todos los posibles substrings
-def buscar_todos_substrings(checker, texto, min_length=3, max_length=10):
-    """
-    Busca todos los posibles substrings en la base de datos
-    
-    Args:
-        checker: instancia de OpenSkyAvionChecker
-        texto: texto completo del OCR
-        min_length: longitud mínima del substring
-        max_length: longitud máxima del substring
-    """
-    resultados = []
-    texto_upper = texto.upper()
-    
-    # Extraer todas las posibles combinaciones de letras/números
-    palabras = re.findall(r'[A-Z0-9]{3,10}', texto_upper)
-    
-    for palabra in palabras:
-        # Buscar substrings de diferentes longitudes
-        for length in range(min_length, min(max_length, len(palabra)) + 1):
-            for start in range(0, len(palabra) - length + 1):
-                substring = palabra[start:start+length]
-                
-                # Buscar en base de datos
-                resultados_db = checker.buscar_en_base_datos(substring)
-                
-                if not resultados_db.empty:
-                    for _, avion in resultados_db.iterrows():
-                        resultado = {
-                            'substring': substring,
-                            'icao24': avion.get('icao24', ''),
-                            'registration': avion.get('registration', ''),
-                            'model': avion.get('model', ''),
-                            'operator': avion.get('operator', '')
-                        }
-                        resultados.append(resultado)
-    
-    return resultados
-
-# Versión alternativa que usa la función de búsqueda por substrings
-def process_video_with_opensky_substrings(video_path, checker, frames_per_second_to_process=1, output_csv='aviones_detectados.csv'):
-    """
-    Versión que busca todos los posibles substrings en el texto OCR
-    """
-    
-    print(f"🎬 Procesando video: {video_path}")
-    resultados_ocr = extract_text_from_video(
-        video_path, 
-        frames_per_second_to_process=frames_per_second_to_process,
-        output_file='ocr_resultados.txt'
-    )
-    
-    if not checker.db_loaded:
-        print("⚠️  Cargando base de datos...")
-        checker.cargar_base_datos()
-    
-    aviones_detectados = []
-    
-    for timestamp, frame_texts in resultados_ocr:
-        texto_completo = ' '.join(frame_texts)
-        
-        print(f"\n⏱️  Timestamp: {timestamp:.2f}s")
-        print(f"  📝 Texto: {texto_completo[:100]}...")
-        
-        # Buscar todos los substrings posibles
-        resultados_substrings = buscar_todos_substrings(checker, texto_completo)
-        
-        for resultado in resultados_substrings:
-            info_avion = {
-                'timestamp': timestamp,
-                'timestamp_formateado': f"{int(timestamp//3600):02d}:{int((timestamp%3600)//60):02d}:{timestamp%60:06.3f}",
-                'substring_encontrado': resultado['substring'],
-                'icao24': resultado['icao24'],
-                'registration': resultado['registration'],
-                'model': resultado['model'],
-                'operator': resultado['operator'],
-                'texto_ocr': texto_completo[:500]
-            }
-            
-            # Evitar duplicados
-            if not any(a.get('icao24') == info_avion['icao24'] and 
-                      a.get('timestamp') is not None and
-                      abs(a['timestamp'] - timestamp) < 1.0 
-                      for a in aviones_detectados):
-                aviones_detectados.append(info_avion)
-                print(f"  ✅ Detectado: {resultado['registration']} via '{resultado['substring']}'")
-    
-    # Guardar en CSV
-    if aviones_detectados:
-        df = pd.DataFrame(aviones_detectados)
-        df.to_csv(output_csv, index=False, encoding='utf-8')
-        print(f"\n💾 Guardados {len(aviones_detectados)} registros en {output_csv}")
-    
-    return aviones_detectados
-
 # Ejecutar si se llama directamente
-def process_video_with_flightaware(video_path: str, frames_per_second_to_process=1, output_csv='vuelos_detectados.csv'):
+def process_video_with_flightaware(video_path: str, frames_per_second_to_process=1, output_csv=None) -> pd.DataFrame:
     """
-    Procesa video con OCR, busca códigos de vuelo en FlightAware y guarda resultados en CSV
+    Procesa video con OCR, busca códigos de vuelo en FlightAware y guarda resultados en CSV.
+    Evita scrapeos innecesarios verificando códigos previamente procesados.
     
     Args:
         video_path: ruta del video
@@ -382,9 +290,30 @@ def process_video_with_flightaware(video_path: str, frames_per_second_to_process
     # Inicializar el scraper de FlightAware
     scraper = FlightAwareScraper()
     
+    # Diccionario para almacenar códigos ya procesados y sus resultados
+    cache_vuelos = {}
+    
+    # Cargar datos existentes si el archivo de salida ya existe
+    vuelos_detectados = []
+    if output_csv and os.path.exists(output_csv):
+        try:
+            df_existente = pd.read_csv(output_csv)
+            vuelos_detectados = df_existente.to_dict('records')
+            # Crear caché de códigos ya procesados
+            for vuelo in vuelos_detectados:
+                codigo = vuelo['codigo_vuelo']
+                if codigo not in cache_vuelos:
+                    cache_vuelos[codigo] = {
+                        'aerolinea': vuelo.get('aerolinea', 'Desconocida'),
+                        'origen': vuelo.get('origen', ''),
+                        'destino': vuelo.get('destino', '')
+                    }
+            print(f"📋 Cargados {len(cache_vuelos)} códigos de vuelo previamente procesados")
+        except Exception as e:
+            print(f"⚠️  No se pudo cargar el archivo existente: {e}")
+    
     # Extraer fecha y hora del nombre del archivo
     video_date, video_time = extract_datetime_from_filename(video_path)
-    print(f"📅 Fecha del video: {video_date}, Hora: {video_time}")
     
     # 1. Procesar video con OCR
     print(f"🎬 Procesando video: {video_path}")
@@ -394,7 +323,7 @@ def process_video_with_flightaware(video_path: str, frames_per_second_to_process
         output_file='ocr_resultados.txt'  # Archivo temporal para OCR
     )
     
-    print(f"✅ OCR completado. Se procesaron {len(resultados_ocr)} frames")
+    # print(f"✅ OCR completado. Se procesaron {len(resultados_ocr)} frames")
     
     # 2. Preparar lista para resultados
     vuelos_detectados = []
@@ -403,7 +332,7 @@ def process_video_with_flightaware(video_path: str, frames_per_second_to_process
     patrones_vuelo = [
         r'\b[A-Z]{2}\d{2,4}\b',      # Ej: BA223, AA1234
         r'\b[A-Z]{3}\d{1,4}\b',      # Ej: IBE123, KLM45
-        r'\b[A-Z]\d{1,4}[A-Z]?\b',   # Ej: A123, B456C
+        #r'\b[A-Z]\d{1,4}[A-Z]?\b',   # Ej: A123, B456C
         r'\b[A-Z]{2,3}\s?\d{2,4}\b', # Ej: AA 123, BA 4567
     ]
     
@@ -412,7 +341,7 @@ def process_video_with_flightaware(video_path: str, frames_per_second_to_process
     
     # 4. Procesar cada frame del OCR
     for timestamp, frame_texts in resultados_ocr:
-        print(f"\n⏱️  Timestamp: {timestamp:.2f}s")
+        # print(f"\n⏱️  Timestamp: {timestamp:.2f}s")
         
         # Unir todos los textos del frame
         texto_completo = ' '.join(frame_texts)
@@ -428,21 +357,41 @@ def process_video_with_flightaware(video_path: str, frames_per_second_to_process
                 if 3 <= len(codigo) <= 8:  # Filtrar códigos por longitud razonable
                     posibles_codigos.add(codigo)
         
-        print(f"  📝 Texto OCR: {texto_completo[:100]}...")
+        # print(f"  📝 Texto OCR: {texto_completo[:100]}...")
         
         if posibles_codigos:
             print(f"  🔍 Candidatos encontrados: {', '.join(posibles_codigos)}")
             
             # Verificar cada código en FlightAware
             for codigo in posibles_codigos:
-                print(f"  ✈️  Verificando vuelo: {codigo}")
+                # print(f"  ✈️  Verificando vuelo: {codigo}")
                 
-                # Verificar en FlightAware
-                resultado = scraper.verificar_vuelo(codigo)
+                
+
+                # Verificar si ya tenemos este código en caché
+                if codigo in cache_vuelos:
+                    print(f"  🔄 Código {codigo} ya procesado anteriormente")
+                    resultado = {
+                        'existe': True,
+                        'aerolinea': cache_vuelos[codigo]['aerolinea'],
+                        'origen': {'codigo': cache_vuelos[codigo]['origen'].split(' - ')[0] if ' - ' in cache_vuelos[codigo]['origen'] else '?',
+                                 'ciudad': cache_vuelos[codigo]['origen'].split(' - ')[1] if ' - ' in cache_vuelos[codigo]['origen'] else 'Desconocido'},
+                        'destino': {'codigo': cache_vuelos[codigo]['destino'].split(' - ')[0] if ' - ' in cache_vuelos[codigo]['destino'] else '?',
+                                  'ciudad': cache_vuelos[codigo]['destino'].split(' - ')[1] if ' - ' in cache_vuelos[codigo]['destino'] else 'Desconocido'}
+                    }
+                else:
+                    # Si no está en caché, hacer scraping
+                    print(f"  🔍 Verificando en FlightAware: {codigo}")
+                    resultado = scraper.verificar_vuelo(codigo)
                 
                 if resultado and resultado.get('existe'):
-                    print(f"  ✅ Vuelo encontrado: {codigo}")
-                    print(f"  📊 Detalles: {resultado}")
+                    # Actualizar caché si es un código nuevo
+                    if codigo not in cache_vuelos:
+                        cache_vuelos[codigo] = {
+                            'aerolinea': resultado.get('aerolinea', 'Desconocida'),
+                            'origen': f"{resultado.get('origen', {}).get('codigo', '?')} - {resultado.get('origen', {}).get('ciudad', 'Desconocido')}",
+                            'destino': f"{resultado.get('destino', {}).get('codigo', '?')} - {resultado.get('destino', {}).get('ciudad', 'Desconocido')}"
+                        }
                     
                     # Calcular fecha y hora reales sumando timestamp a la fecha/hora del video
                     real_datetime = None
@@ -471,14 +420,40 @@ def process_video_with_flightaware(video_path: str, frames_per_second_to_process
                         'destino': f"{resultado.get('destino', {}).get('codigo', '?')} - {resultado.get('destino', {}).get('ciudad', 'Desconocido')}",
                     }
                     
+                    # Añadir horarios de takeoff y landing si están disponibles
+                    if 'horarios' in resultado:
+                        horarios = resultado['horarios']
+                        
+                        # Horarios de takeoff
+                        if 'programado' in horarios:
+                            vuelo_info['takeoff_programado'] = horarios['programado']
+                        if 'estimado' in horarios:
+                            vuelo_info['takeoff_estimado'] = horarios['estimado']
+                        if 'actual' in horarios:
+                            vuelo_info['takeoff_actual'] = horarios['actual']
+                        
+                        # Horarios de aterrizaje (landing)
+                        if 'aterrizaje' in horarios:
+                            aterrizaje = horarios['aterrizaje']
+                            if 'programado' in aterrizaje:
+                                vuelo_info['landing_programado'] = aterrizaje['programado']
+                            if 'estimado' in aterrizaje:
+                                vuelo_info['landing_estimado'] = aterrizaje['estimado']
+                            if 'actual' in aterrizaje:
+                                vuelo_info['landing_actual'] = aterrizaje['actual']
+                    
                     vuelos_detectados.append(vuelo_info)
     
     # 5. Guardar resultados en CSV
     if vuelos_detectados:
         df = pd.DataFrame(vuelos_detectados)
-        df.to_csv(output_csv, index=False, encoding='utf-8')
-        print(f"\n✅ Resultados guardados en: {output_csv}")
-        print(f"📊 Total de vuelos detectados: {len(vuelos_detectados)}")
+
+        if output_csv:
+            df.to_csv(output_csv, index=False, encoding='utf-8')
+            print(f"\n✅ Resultados guardados en: {output_csv}")
+            print(f"📊 Total de vuelos detectados: {len(vuelos_detectados)}")
+
+        return df
     else:
         print("\n⚠️  No se detectaron vuelos en el video.")
     
@@ -532,7 +507,8 @@ def main_opensky():
               buscar_db [txt]  - Buscar texto en base de datos
             
             INFORMACIÓN:
-              vuelos           - Mostrar vuelos actuales
+              vuelos     video_path = "/home/gabo/Personal/Work/Lita/Proyectos/VideoSearch/vid-chronicle-main/data/videos/TWR-HAV/2025/05/12/+0,0/2025-05-12T22:13:13Z_2025-05-12T22:28:13Z.mkv"
+      - Mostrar vuelos actuales
               estado           - Estado del sistema
               ayuda            - Mostrar esta ayuda
             
@@ -619,6 +595,11 @@ def main_flightaware():
             print("❌ Opción no válida. Intente nuevamente.")
 
 if __name__ == "__main__":
+    # Ejemplo de uso:
+    # videos = find_video_files('/ruta/a/tu/directorio')
+    # for video in videos:
+    #     print(video)
+    
     # Puedes elegir qué función ejecutar:
     # main_completo()  # Para el menú interactivo completo
     # main_video_processing()  # Para procesamiento directo de video

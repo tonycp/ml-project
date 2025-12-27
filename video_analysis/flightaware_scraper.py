@@ -47,7 +47,7 @@ class FlightAwareScraper:
         codigo_vuelo = codigo_vuelo.upper().strip()
         url = f"{self.base_url}{codigo_vuelo}"
         
-        print(f"🔍 Verificando vuelo {codigo_vuelo}...")
+        # print(f"🔍 Verificando vuelo {codigo_vuelo}...")
         
         response = self._make_request(url)
         if not response:
@@ -55,7 +55,7 @@ class FlightAwareScraper:
         
         # Verificar si la página indica que el vuelo no existe
         if "Unknown Flight" in response.text:
-            print(f"✖ No se encontró información para el vuelo {codigo_vuelo}")
+            # print(f"✖ No se encontró información para el vuelo {codigo_vuelo}")
             return {"existe": False, "codigo_vuelo": codigo_vuelo}
         
         # Buscar datos JSON en la página (FlightAware incrusta datos en JavaScript)
@@ -137,7 +137,7 @@ class FlightAwareScraper:
                             "actual": landing_times.get('actual')
                         }
                     
-                    print(f"✅ Vuelo {codigo_vuelo} encontrado - {result.get('aerolinea', 'N/A')}")
+                    #print(f"✅ Vuelo {codigo_vuelo} encontrado - {result.get('aerolinea', 'N/A')}")
                     return result
             
             # Si no se encuentra JSON, intentar parsear con BeautifulSoup como fallback
@@ -161,14 +161,14 @@ class FlightAwareScraper:
                     airline_name = title_text.split("Historial y rastreo de vuelos")[0].strip()
                     result["aerolinea"] = airline_name
                 
-                print(f"✅ Vuelo {codigo_vuelo} encontrado (método HTML) - {result.get('aerolinea', 'N/A')}")
+                # print(f"✅ Vuelo {codigo_vuelo} encontrado (método HTML) - {result.get('aerolinea', 'N/A')}")
                 return result
                 
         except Exception as e:
             print(f"Error procesando la respuesta: {str(e)}")
         
         # Si llegamos aquí, no se pudo determinar si existe o no
-        print(f"❓ No se pudo determinar la existencia del vuelo {codigo_vuelo}")
+        # print(f"❓ No se pudo determinar la existencia del vuelo {codigo_vuelo}")
         return {"existe": False, "codigo_vuelo": codigo_vuelo, "error": "No se pudo procesar la respuesta"}
 
 def main():
