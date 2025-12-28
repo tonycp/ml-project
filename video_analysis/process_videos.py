@@ -236,8 +236,7 @@ def extract_text_from_video_cv2(video_path, frames_per_second_to_process=1, outp
 
             print(f"Frame {frame_count} (Timestamp: {timestamp:.2f}s): {' '.join(frame_text)}")
 
-        frame_count += frame_skip
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_count)
+        frame_count += 1
 
     cap.release()
     
