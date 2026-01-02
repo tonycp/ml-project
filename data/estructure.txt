@@ -1,0 +1,365 @@
+Tienes razón, me disculpo. Te proporcionaré la estructura exacta con todas las columnas de cada archivo basándome en las muestras que me diste:
+
+## **Archivos ATC (Air Traffic Control)**
+
+### 1. **atc_atcoperation_202512301506.csv**
+**Columnas (58):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"dof"`
+5. `"fpl_number"`
+6. `"atd"`
+7. `"ata"`
+8. `"eobt"`
+9. `"etd"`
+10. `"eta"`
+11. `"aobt"`
+12. `"gufi"`
+13. `"acid"`
+14. `"flight_type"`
+15. `"sts"`
+16. `"app"`
+17. `"surv_equipment"`
+18. `"com_equipment"`
+19. `"pbn"`
+20. `"performance"`
+21. `"check_points"`
+22. `"codi"`
+23. `"airline_code"`
+24. `"enter_point_geo"`
+25. `"enter_point"`
+26. `"enter_time"`
+27. `"exit_point_geo"`
+28. `"exit_point"`
+29. `"exit_time"`
+30. `"fl"`
+31. `"planned_route"`
+32. `"reg"`
+33. `"rvsm_equipped"`
+34. `"rnav_capabilty"`
+35. `"sectors"`
+36. `"ssr"`
+37. `"speed"`
+38. `"adep"`
+39. `"adest"`
+40. `"aircraft_type"`
+41. `"repeated"`
+42. `"aibt"`
+43. `"aldt"`
+44. `"atot"`
+45. `"ctot"`
+46. `"dep_rwy"`
+47. `"dep_stand"`
+48. `"eldt"`
+49. `"etot"`
+50. `"sibt"`
+51. `"sobt"`
+52. `"arr_rwy"`
+53. `"arr_stand"`
+54. `"arr_taxi"`
+55. `"dep_taxi"`
+56. `"sta"`
+57. `"std"`
+58. `"flight_rules"`
+59. `"type_of_flight"`
+60. `"wtc"`
+
+### 2. **atc_dayatcopsummary_202512301506.csv**
+**Columnas (15):**
+1. `"created"`
+2. `"time"`
+3. `"arrivals"`
+4. `"departures"`
+5. `"overflights"`
+6. `"nationals"`
+7. `"unknown"`
+8. `"rep_arrivals"`
+9. `"rep_departures"`
+10. `"rep_overflights"`
+11. `"rep_nationals"`
+12. `"rep_unknown"`
+13. `"repeated"`
+14. `"total"`
+15. `"fpp"`
+
+### 3. **atc_houratcopsummary_202512301506.csv**
+**Columnas (15):** Mismas que `atc_dayatcopsummary_202512301506.csv`:
+1. `"created"`
+2. `"time"`
+3. `"arrivals"`
+4. `"departures"`
+5. `"overflights"`
+6. `"nationals"`
+7. `"unknown"`
+8. `"rep_arrivals"`
+9. `"rep_departures"`
+10. `"rep_overflights"`
+11. `"rep_nationals"`
+12. `"rep_unknown"`
+13. `"repeated"`
+14. `"total"`
+15. `"fpp"`
+
+## **Archivos ATFM (Air Traffic Flow Management)**
+
+### **Archivos diarios (day*)**
+
+### 4. **atfm_dayadepflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"adep"`
+5. `"total"`
+
+### 5. **atfm_dayadestflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"adest"`
+5. `"total"`
+
+### 6. **atfm_dayaircrafttype_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aircraft_type"`
+5. `"total"`
+
+### 7. **atfm_dayaircrafttypesector_202512301506.csv**
+**Columnas (7):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aircraft_type"`
+5. `"aoi"`
+6. `"sector_name"`
+7. `"total"`
+
+### 8. **atfm_dayairlineflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"airline"`
+5. `"total"`
+
+### 9. **atfm_dayaoigroupaircrafttypeflights_202512301506.csv**
+**Columnas (6):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi_group"`
+5. `"aircraft_type"`
+6. `"aois"`
+7. `"total"`
+
+### 10. **atfm_dayaoigroupflights_202512301506.csv**
+**Columnas (6):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi_group"`
+5. `"aois"`
+6. `"total"`
+
+### 11. **atfm_dayflflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"fl"`
+5. `"total"`
+
+### 12. **atfm_daypointflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"point_name"`
+5. `"total"`
+
+### 13. **atfm_dayrouteflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"route_name"`
+5. `"total"`
+
+### 14. **atfm_daysectorflights_202512301506.csv**
+**Columnas (6):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"sector_name"`
+5. `"total"`
+6. `"aoi"`
+
+### **Archivos horarios (hour*)**
+
+### 15. **atfm_houradepflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"adep"`
+5. `"total"`
+
+### 16. **atfm_houradestflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"adest"`
+5. `"total"`
+
+### 17. **atfm_houraircrafttypesector_202512301506.csv**
+**Columnas (7):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi"`
+5. `"aircraft_type"`
+6. `"sector_name"`
+7. `"total"`
+
+### 18. **atfm_hourairlineflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"airline"`
+5. `"total"`
+
+### 19. **atfm_hourflflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"fl"`
+5. `"total"`
+
+### 20. **atfm_hourlyaoigroupflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi"`
+5. `"groups"`
+6. `"gufis"`
+
+### 21. **atfm_hourpointflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"point_name"`
+5. `"total"`
+
+### 22. **atfm_hourrouteflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"route_name"`
+5. `"total"`
+
+### 23. **atfm_hoursectorflights_202512301506.csv**
+**Columnas (6):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"sector_name"`
+5. `"total"`
+6. `"aoi"`
+
+### **Archivos mensuales (month*)**
+
+### 24. **atfm_monthaircrafttypesector_202512301506.csv**
+**Columnas (7):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aircraft_type"`
+5. `"aoi"`
+6. `"sector_name"`
+7. `"total"`
+
+### 25. **atfm_monthpointflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"point_name"`
+5. `"total"`
+
+### 26. **atfm_monthrouteflights_202512301506.csv**
+**Columnas (5):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"route_name"`
+5. `"total"`
+
+### **Archivos de carga de sector (sectorload*)**
+
+### 27. **atfm_sectorload_202512301506.csv**
+**Columnas (7):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi"`
+5. `"sector_name"`
+6. `"load"`
+7. `"time_slot"`
+
+### 28. **atfm_sectorloadadep_202512301506.csv**
+**Columnas (8):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi"`
+5. `"sector_name"`
+6. `"adep"`
+7. `"load"`
+8. `"time_slot"`
+
+### 29. **atfm_sectorloadadest_202512301506.csv**
+**Columnas (8):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi"`
+5. `"sector_name"`
+6. `"adest"`
+7. `"load"`
+8. `"time_slot"`
+
+### 30. **atfm_sectorloadairline_202512301506.csv**
+**Columnas (8):**
+1. `"id"`
+2. `"created"`
+3. `"time"`
+4. `"aoi"`
+5. `"sector_name"`
+6. `"airline"`
+7. `"load"`
+8. `"time_slot"`
+
+## **Resumen por categoría:**
+
+1. **Archivos ATC (3):** 
+   - atc_atcoperation (58 columnas)
+   - atc_dayatcopsummary (15 columnas)
+   - atc_houratcopsummary (15 columnas)
+
+2. **Archivos ATFM diarios (11):** 5-6 columnas cada uno
+3. **Archivos ATFM horarios (11):** 5-6 columnas cada uno (excepto hourflflights y houraircrafttypesector que no mostraron datos en la muestra)
+4. **Archivos ATFM mensuales (3):** 5-7 columnas cada uno
+5. **Archivos de carga sectorial (4):** 7-8 columnas cada uno
+
+**Total: 32 archivos CSV con estructuras específicas para cada tipo de análisis de tráfico aéreo.**

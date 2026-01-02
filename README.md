@@ -209,27 +209,91 @@ event_type, confidence = classifier.classify(
 ## Estructura del Proyecto
 
 ```
-Event_extractor/
-├── __init__.py          # Punto de entrada principal
-├── models/              # Modelos de datos
-│   ├── news.py         # NewsContent, NewsMetadata
-│   └── event.py        # Event, EventType
-├── extractors/         # Extractores de información
-│   └── date_extractor.py
-├── classifiers/        # Clasificadores
-│   └── event_type_classifier.py
-├── pipeline/           # Pipeline principal
-│   └── event_pipeline.py
-└── utils/              # Utilidades
-    └── text_preprocessor.py
+ml-project/
+├── Event_extractor/          # Librería de extracción de eventos
+│   ├── __init__.py          # Punto de entrada principal
+│   ├── models/              # Modelos de datos
+│   │   ├── news.py         # NewsContent, NewsMetadata
+│   │   └── event.py        # Event, EventType
+│   ├── extractors/         # Extractores de información
+│   │   └── date_extractor.py
+│   ├── classifiers/        # Clasificadores
+│   │   └── event_type_classifier.py
+│   ├── pipeline/           # Pipeline principal
+│   │   └── event_pipeline.py
+│   └── utils/              # Utilidades
+│       └── text_preprocessor.py
+├── models/                  # 🚀 Sistema de Forecasting de Aeronaves
+│   ├── __init__.py         # Imports principales
+│   ├── config.py           # Configuración del sistema
+│   ├── data_loader.py      # Carga de datos ATC/ATFM
+│   ├── preprocessing.py    # Limpieza y preprocesamiento
+│   ├── features.py         # Ingeniería de características
+│   ├── model.py            # Modelos ML (ARIMA, Prophet, LSTM)
+│   ├── train.py            # Script de entrenamiento
+│   ├── evaluate.py         # Script de evaluación
+│   ├── example_usage.py    # Ejemplo de uso completo
+│   ├── test_basic.py       # Tests básicos
+│   └── README.md           # Documentación detallada
+├── data/                   # Datos de entrada
+│   └── ATC csvs/          # Archivos CSV ATC/ATFM
+├── etl-tool/              # Herramienta ETL para SQL Server/Postgres
+├── db-tool/               # Herramienta de carga de bases de datos
+└── examples/              # Ejemplos de uso
 ```
+
+## 🚀 Sistema de Forecasting de Aeronaves
+
+Además de la extracción de eventos, el proyecto incluye un **sistema completo de forecasting** para predecir el número de aeronaves en el espacio aéreo cubano usando datos ATC/ATFM.
+
+### Características del Sistema de Forecasting
+
+- **📊 Modelos ML**: ARIMA, Prophet, LSTM y Ensemble
+- **🎯 Target**: Número total de aeronaves por día/hora
+- **📈 Features**: Temporales, lags, estadísticas móviles, estacionalidad
+- **📋 Datos**: Resúmenes ATC diarios, ATFM horarios, rutas mensuales
+- **📉 Evaluación**: MAE, RMSE, MAPE, R² con validación cruzada
+
+### Inicio Rápido - Forecasting
+
+```bash
+# Instalar dependencias adicionales
+pip install -r requirements.txt
+
+# Ejecutar tests básicos
+python models/test_basic.py
+
+# Ejemplo completo de uso
+python models/example_usage.py
+
+# Entrenar modelos
+python models/train.py --data-type daily_atc --models arima prophet --save-models
+
+# Evaluar rendimiento
+python models/evaluate.py --horizons 1 7 14 --output-dir evaluation_results
+```
+
+### Arquitectura del Sistema de Forecasting
+
+```
+models/
+├── data_loader.py      # Carga datos ATC/ATFM desde CSV
+├── preprocessing.py    # Limpieza, outliers, frecuencia
+├── features.py         # Features temporales, lags, rolling
+├── model.py            # ARIMA, Prophet, LSTM, Ensemble
+├── train.py            # Entrenamiento automatizado
+├── evaluate.py         # Evaluación con métricas y gráficos
+└── config.py           # Configuración centralizada
+```
+
+Ver [`models/README.md`](models/README.md) para documentación completa.
 
 ## Roadmap
 
+- [x] Sistema de forecasting de aeronaves con ML
 - [ ] Soporte para más formatos de entrada de noticias
 - [ ] Extracción de ubicaciones geográficas
 - [ ] Identificación de actores/entidades involucradas
-- [ ] Modelo de machine learning para clasificación
 - [ ] API REST para procesamiento en línea
 - [ ] Soporte para más idiomas
 

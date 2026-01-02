@@ -3,6 +3,16 @@ spacy>=3.0.0
 python-dateutil>=2.8.0
 tqdm>=4.65.0
 
+# Dependencias de Machine Learning y Forecasting
+pandas>=1.5.0
+numpy>=1.21.0
+scikit-learn>=1.3.0
+statsmodels>=0.14.0
+prophet>=1.1.0
+tensorflow>=2.13.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+
 # Dependencias de desarrollo (opcional)
 pytest>=7.0.0
 pytest-cov>=4.0.0
