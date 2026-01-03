@@ -44,6 +44,18 @@ logger = logging.getLogger(__name__)
 config = ModelConfig()
 RANDOM_STATE = 42
 
+# Configuración de almacenamiento para Optuna
+import sqlite3
+from pathlib import Path
+
+# Crear directorio para almacenamiento si no existe
+storage_dir = Path("optuna_storage")
+storage_dir.mkdir(exist_ok=True)
+
+# Configurar el almacenamiento
+storage_name = f"sqlite:///{storage_dir}/aircraft_forecasting.db"
+study_name = "aircraft_forecasting_study"
+
 def load_and_prepare_data(forecast_horizon=7):
     """Carga y prepara los datos para el entrenamiento."""
     logger.info("Cargando y preparando datos...")
@@ -203,27 +215,47 @@ def optimize_hyperparameters(X, y, n_trials=50):
     Returns:
         study: Objeto de estudio de Optuna
     """
-    # Crear estudio
-    study = optuna.create_study(
-        direction='minimize',
-        sampler=TPESampler(seed=RANDOM_STATE),
-        study_name='aircraft_forecasting'
-    )
+    # Crear o cargar estudio con almacenamiento persistente
+    try:
+        # Intentar cargar un estudio existente
+        study = optuna.create_study(
+            study_name=study_name,
+            storage=storage_name,
+            load_if_exists=True,
+            direction='minimize',
+            sampler=TPESampler(seed=RANDOM_STATE)
+        )
+        logger.info(f"Estudio cargado. Número de trials existentes: {len(study.trials)}")
+    except Exception as e:
+        # Si no existe, crear uno nuevo
+        study = optuna.create_study(
+            study_name=study_name,
+            storage=storage_name,
+            direction='minimize',
+            sampler=TPESampler(seed=RANDOM_STATE)
+        )
+        logger.info("Nuevo estudio creado")
     
     # Función objetivo parcial
     def objective_wrapper(trial):
         return objective(trial, X, y)
     
-    # Optimizar
-    logger.info(f"Iniciando optimización con {n_trials} pruebas...")
-    study.optimize(objective_wrapper, n_trials=n_trials, show_progress_bar=True)
+    # Calcular cuántos trials nuevos necesitamos
+    remaining_trials = max(0, n_trials - len(study.trials))
+    
+    if remaining_trials > 0:
+        logger.info(f"Iniciando optimización con {remaining_trials} pruebas nuevas...")
+        study.optimize(objective_wrapper, n_trials=remaining_trials, show_progress_bar=True)
+    else:
+        logger.info(f"Ya se han completado {len(study.trials)} trials. No se necesitan más pruebas.")
     
     # Mostrar resultados
+    logger.info("\nResumen de la optimización:")
+    logger.info(f"Número total de trials: {len(study.trials)}")
+    logger.info(f"Mejor valor (MAE): {study.best_value:.4f}")
     logger.info("Mejores parámetros encontrados:")
     for key, value in study.best_params.items():
         logger.info(f"  {key}: {value}")
-    
-    logger.info(f"Mejor MAE: {study.best_value:.4f}")
     
     return study
 
