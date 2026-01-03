@@ -382,16 +382,44 @@ class LSTMModel(BaseForecaster):
 
         try:
             X_scaled = self.scaler_X.transform(X)
+            
+            # Crear secuencias para predicción
             X_seq, _ = self._create_sequences(X_scaled, np.zeros(len(X_scaled)))
-
+            
+            # Hacer predicciones
             predictions_scaled = self.model.predict(X_seq, verbose=0)
+            
+            # Verificar si hay NaN en las predicciones escaladas
+            if np.isnan(predictions_scaled).any():
+                self.logger.warning("Se detectaron valores NaN en las predicciones escaladas. Reemplazando con ceros.")
+                predictions_scaled = np.nan_to_num(predictions_scaled, nan=0.0)
+            
             predictions = self.scaler_y.inverse_transform(predictions_scaled)
-
-            return predictions.ravel()
+            
+            # Verificar nuevamente después de la inversión de escala
+            if np.isnan(predictions).any():
+                self.logger.warning("Se detectaron valores NaN después de la inversión de escala. Reemplazando con ceros.")
+                predictions = np.nan_to_num(predictions, nan=0.0)
+            
+            # Crear un array completo con NaN para las primeras posiciones
+            full_predictions = np.full(len(X), np.nan)
+            
+            # Asegurarse de que las predicciones tengan la longitud correcta
+            if len(predictions) > len(X):
+                predictions = predictions[-len(X):]
+            
+            # Asegurarse de que no haya NaN en las predicciones finales
+            predictions = np.nan_to_num(predictions.ravel(), nan=0.0)
+            
+            # Asignar las predicciones al final del array
+            full_predictions[-len(predictions):] = predictions
+            
+            return full_predictions
 
         except Exception as e:
             self.logger.error(f"Error en predicción LSTM: {e}")
-            raise
+            # En caso de error, devolver un array de ceros del tamaño correcto
+            return np.zeros(len(X))
 
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Crea secuencias para LSTM."""

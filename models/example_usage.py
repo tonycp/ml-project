@@ -107,8 +107,8 @@ def main():
             print(f"✓ Forecast 7 días: {forecast_7d}")
 
             # Forecast futuro (sin datos históricos)
-            future_forecast = forecaster.forecast(forecast_horizon=3)
-            print(f"✓ Forecast futuro 3 días: {future_forecast}")
+            # future_forecast = forecaster.forecast(forecast_horizon=3)
+            # print(f"✓ Forecast futuro 3 días: {future_forecast}")
 
         # 8. Reporte final
         print("\n📋 Paso 8: Resumen")

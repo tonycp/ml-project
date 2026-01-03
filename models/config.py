@@ -35,6 +35,12 @@ class ModelConfig:
 
     # Configuración de modelos
     models: Dict[str, Dict] = None
+    
+    # Configuración de features
+    feature_config: Dict = None
+    
+    # Configuración de evaluación
+    evaluation_config: Dict = None
 
     def __post_init__(self):
         if self.models is None:
@@ -69,10 +75,6 @@ class ModelConfig:
                 }
             }
 
-    # Configuración de features
-    feature_config: Dict = None
-
-    def __post_init__(self):
         if self.feature_config is None:
             self.feature_config = {
                 "temporal_features": True,
@@ -83,10 +85,6 @@ class ModelConfig:
                 "covid_adjustment": True,  # Ajuste por impacto COVID
             }
 
-    # Configuración de evaluación
-    evaluation_config: Dict = None
-
-    def __post_init__(self):
         if self.evaluation_config is None:
             self.evaluation_config = {
                 "metrics": ["mae", "rmse", "mape", "r2"],

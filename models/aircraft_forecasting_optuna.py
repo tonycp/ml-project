@@ -71,7 +71,7 @@ def load_and_prepare_data(forecast_horizon=7):
     
     return X, y, df_featured
 
-def objective(trial, X, y, model_type='random_forest'):
+def objective(trial, X, y):
     """
     Función objetivo para la optimización con Optuna.
     
@@ -79,15 +79,17 @@ def objective(trial, X, y, model_type='random_forest'):
         trial: Objeto de prueba de Optuna
         X: Características de entrenamiento
         y: Variable objetivo
-        model_type: Tipo de modelo a optimizar ('random_forest', 'prophet', 'lstm', 'arima')
         
     Returns:
         Error de validación (MAE) a minimizar
     """
+    # Selección del modelo
+    algorithm = trial.suggest_categorical('algorithm', ['random_forest', 'prophet', 'lstm', 'arima'])
+
     # Crear una copia de la configuración
     trial_config = ModelConfig()
-    
-    if model_type == 'random_forest':
+
+    if algorithm == 'random_forest':
         # Espacio de búsqueda para Random Forest
         trial_config.models['random_forest'] = {
             'n_estimators': trial.suggest_int('rf_n_estimators', 50, 500, step=50),
@@ -101,7 +103,7 @@ def objective(trial, X, y, model_type='random_forest'):
         
         model = RandomForestModel(trial_config)
         
-    elif model_type == 'prophet':
+    elif algorithm == 'prophet':
         # Espacio de búsqueda para Prophet
         trial_config.models['prophet'] = {
             'yearly_seasonality': trial.suggest_categorical('prophet_yearly', [True, False]),
@@ -116,7 +118,7 @@ def objective(trial, X, y, model_type='random_forest'):
         
         model = ProphetModel(trial_config)
         
-    elif model_type == 'lstm':
+    elif algorithm == 'lstm':
         # Espacio de búsqueda para LSTM
         trial_config.models['lstm'] = {
             'sequence_length': trial.suggest_int('lstm_sequence_length', 7, 30, step=7),
@@ -131,7 +133,7 @@ def objective(trial, X, y, model_type='random_forest'):
         
         model = LSTMModel(trial_config)
         
-    elif model_type == 'arima':
+    elif algorithm == 'arima':
         # Espacio de búsqueda para ARIMA
         p = trial.suggest_int('arima_p', 0, 5)
         d = trial.suggest_int('arima_d', 0, 2)
@@ -149,7 +151,7 @@ def objective(trial, X, y, model_type='random_forest'):
         model = ARIMAModel(trial_config)
     
     else:
-        raise ValueError(f"Tipo de modelo no soportado: {model_type}")
+        raise ValueError(f"Tipo de modelo no soportado: {algorithm}")
     
     # Validación cruzada temporal
     tscv = TimeSeriesSplit(n_splits=5)
@@ -164,22 +166,38 @@ def objective(trial, X, y, model_type='random_forest'):
         
         # Predecir
         y_pred = model.predict(X_val)
-        
+
+        # Alinear predicciones con el target y filtrar valores no finitos
+        y_pred = np.asarray(y_pred).ravel()
+
+        if len(y_pred) != len(y_val):
+            min_len = min(len(y_pred), len(y_val))
+            y_pred = y_pred[-min_len:]
+            y_val_aligned = y_val.iloc[-min_len:]
+        else:
+            y_val_aligned = y_val
+
+        valid_mask = np.isfinite(y_pred)
+        if not valid_mask.any():
+            raise ValueError("Predicciones no válidas: todas son NaN o infinitas")
+
+        y_pred = y_pred[valid_mask]
+        y_val_aligned = y_val_aligned.iloc[np.where(valid_mask)[0]]
+
         # Calcular métricas
-        mae = mean_absolute_error(y_val, y_pred)
+        mae = mean_absolute_error(y_val_aligned, y_pred)
         scores.append(mae)
     
     # Devolver el MAE promedio
     return np.mean(scores)
 
-def optimize_hyperparameters(X, y, model_type='random_forest', n_trials=50):
+def optimize_hyperparameters(X, y, n_trials=50):
     """
     Optimiza los hiperparámetros usando Optuna.
     
     Args:
         X: Características
         y: Variable objetivo
-        model_type: Tipo de modelo a optimizar
         n_trials: Número de pruebas a realizar
         
     Returns:
@@ -189,15 +207,15 @@ def optimize_hyperparameters(X, y, model_type='random_forest', n_trials=50):
     study = optuna.create_study(
         direction='minimize',
         sampler=TPESampler(seed=RANDOM_STATE),
-        study_name=f'aircraft_forecasting_{model_type}'
+        study_name='aircraft_forecasting'
     )
     
     # Función objetivo parcial
     def objective_wrapper(trial):
-        return objective(trial, X, y, model_type)
+        return objective(trial, X, y)
     
     # Optimizar
-    logger.info(f"Iniciando optimización para {model_type} con {n_trials} pruebas...")
+    logger.info(f"Iniciando optimización con {n_trials} pruebas...")
     study.optimize(objective_wrapper, n_trials=n_trials, show_progress_bar=True)
     
     # Mostrar resultados
@@ -214,26 +232,10 @@ def main():
     # Cargar y preparar datos
     X, y, _ = load_and_prepare_data(forecast_horizon=7)
     
-    # Modelos a optimizar
-    models_to_optimize = ['random_forest', 'prophet', 'lstm', 'arima']
+    # Optimizar
+    study = optimize_hyperparameters(X, y, n_trials=50)
     
-    # Diccionario para almacenar los estudios
-    studies = {}
-    
-    # Optimizar cada modelo
-    for model_type in models_to_optimize:
-        try:
-            study = optimize_hyperparameters(
-                X, y, 
-                model_type=model_type,
-                n_trials=50  # Ajustar según sea necesario
-            )
-            studies[model_type] = study
-        except Exception as e:
-            logger.error(f"Error optimizando {model_type}: {str(e)}")
-            continue
-    
-    return studies
+    return study
 
 if __name__ == "__main__":
-    studies = main()
+    study = main()
