@@ -337,6 +337,231 @@ def plot_hyperparameter_relationships(study):
     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
     return fig
 
+
+def plot_best_model_learning_diagnostics(study, forecast_horizon: int = 7):
+    """Genera curvas de error y diagnósticos de sobre/infraajuste para el mejor modelo."""
+    best_trial = study.best_trial
+    best_algo = best_trial.params.get('algorithm')
+
+    fig, axes = plt.subplots(2, 2, figsize=(18, 12), squeeze=False)
+    fig.suptitle('Diagnóstico del Mejor Modelo', fontsize=20, weight='bold', y=0.98)
+
+    if best_algo != 'random_forest':
+        for ax in axes.ravel():
+            ax.axis('off')
+        axes[0, 0].text(
+            0.5,
+            0.5,
+            f'Diagnósticos detallados aún no implementados para "{best_algo}".',
+            ha='center',
+            va='center',
+            fontsize=13
+        )
+        return fig
+
+    try:
+        from sklearn.ensemble import RandomForestRegressor
+        from sklearn.model_selection import TimeSeriesSplit
+        from sklearn.metrics import mean_absolute_error
+    except ImportError:
+        for ax in axes.ravel():
+            ax.axis('off')
+        axes[0, 0].text(
+            0.5,
+            0.5,
+            'Se requiere scikit-learn para generar los diagnósticos.',
+            ha='center',
+            va='center',
+            fontsize=13
+        )
+        return fig
+
+    try:
+        from aircraft_forecasting_optuna import load_and_prepare_data
+    except ImportError:
+        for ax in axes.ravel():
+            ax.axis('off')
+        axes[0, 0].text(
+            0.5,
+            0.5,
+            'No se pudo importar load_and_prepare_data para recrear el mejor modelo.',
+            ha='center',
+            va='center',
+            fontsize=13
+        )
+        return fig
+
+    try:
+        X, y, _ = load_and_prepare_data(forecast_horizon=forecast_horizon)
+    except Exception as exc:
+        for ax in axes.ravel():
+            ax.axis('off')
+        axes[0, 0].text(
+            0.5,
+            0.5,
+            f'Error cargando datos para diagnosticar el modelo: {exc}',
+            ha='center',
+            va='center',
+            fontsize=13
+        )
+        return fig
+
+    # Asegurar que los índices coincidan
+    common_idx = X.index.intersection(y.index)
+    if len(common_idx) == 0:
+        for ax in axes.ravel():
+            ax.axis('off')
+        axes[0, 0].text(
+            0.5,
+            0.5,
+            'No hay coincidencia entre los índices de X e y.',
+            ha='center',
+            va='center',
+            fontsize=13
+        )
+        return fig
+
+    aligned_idx = common_idx.sort_values()
+    X = X.loc[aligned_idx].sort_index()
+    y = y.loc[aligned_idx].sort_index()
+
+    X_model = X.reset_index(drop=True)
+    y_model = y.reset_index(drop=True)
+
+    rf_params = {
+        'n_estimators': best_trial.params.get('rf_n_estimators', 200),
+        'max_depth': best_trial.params.get('rf_max_depth'),
+        'min_samples_split': best_trial.params.get('rf_min_samples_split', 2),
+        'min_samples_leaf': best_trial.params.get('rf_min_samples_leaf', 1),
+        'max_features': best_trial.params.get('rf_max_features'),
+        'bootstrap': best_trial.params.get('rf_bootstrap', True),
+        'random_state': 42,
+        'n_jobs': -1
+    }
+
+    if isinstance(rf_params['max_features'], str) and rf_params['max_features'].lower() == 'none':
+        rf_params['max_features'] = None
+
+    train_mae_folds = []
+    val_mae_folds = []
+    fold_labels = []
+    final_val_pred = None
+    final_val_features = None
+    final_val_target = None
+    final_train_idx = None
+
+    tscv = TimeSeriesSplit(n_splits=5)
+
+    for fold, (train_idx, val_idx) in enumerate(tscv.split(X_model), start=1):
+        X_train, X_val = X_model.iloc[train_idx], X_model.iloc[val_idx]
+        y_train, y_val = y_model.iloc[train_idx], y_model.iloc[val_idx]
+
+        model = RandomForestRegressor(**rf_params)
+        model.fit(X_train, y_train)
+
+        train_pred = model.predict(X_train)
+        val_pred = model.predict(X_val)
+
+        train_mae = mean_absolute_error(y_train, train_pred)
+        val_mae = mean_absolute_error(y_val, val_pred)
+
+        train_mae_folds.append(train_mae)
+        val_mae_folds.append(val_mae)
+        fold_labels.append(fold)
+
+        if fold == tscv.n_splits:
+            final_val_pred = val_pred
+            final_val_features = X_val.copy()
+            final_val_target = pd.Series(
+                y_val.values,
+                index=y.index[val_idx],
+                name=y.name
+            )
+            final_train_idx = train_idx.copy()
+
+    ax_cv = axes[0][0]
+    sns.lineplot(x=fold_labels, y=train_mae_folds, marker='o', ax=ax_cv, label='MAE entrenamiento', color='#1f77b4')
+    sns.lineplot(x=fold_labels, y=val_mae_folds, marker='o', ax=ax_cv, label='MAE validación', color='#ff7f0e')
+    ax_cv.set_title('MAE por fold (TimeSeriesSplit)', weight='bold')
+    ax_cv.set_xlabel('Fold')
+    ax_cv.set_ylabel('MAE')
+    ax_cv.set_yscale('log')
+    ax_cv.yaxis.set_major_formatter(FuncFormatter(lambda y_val, _: f"{y_val:.0f}"))
+    ax_cv.legend()
+
+    ax_curve = axes[0][1]
+    if final_train_idx is not None and final_val_pred is not None and final_val_features is not None:
+        train_sizes = np.linspace(0.3, 1.0, 25)
+        train_sample_counts = []
+        train_curve_mae = []
+        val_curve_mae = []
+
+        for frac in train_sizes:
+            subset_len = max(25, int(len(final_train_idx) * frac))
+            subset_idx = final_train_idx[:subset_len]
+            X_subset = X_model.iloc[subset_idx]
+            y_subset = y_model.iloc[subset_idx]
+
+            model = RandomForestRegressor(**rf_params)
+            model.fit(X_subset, y_subset)
+
+            train_pred_subset = model.predict(X_subset)
+            val_pred_subset = model.predict(final_val_features)
+
+            train_curve_mae.append(mean_absolute_error(y_subset, train_pred_subset))
+            val_curve_mae.append(mean_absolute_error(final_val_target.values, val_pred_subset))
+            train_sample_counts.append(len(subset_idx))
+
+        sns.lineplot(x=train_sample_counts, y=train_curve_mae, marker='o', ax=ax_curve, label='MAE entrenamiento', color='#1f77b4')
+        sns.lineplot(x=train_sample_counts, y=val_curve_mae, marker='o', ax=ax_curve, label='MAE validación', color='#ff7f0e')
+        ax_curve.set_title('Curva de aprendizaje (tamaño de entrenamiento)', weight='bold')
+        ax_curve.set_xlabel('Muestras utilizadas para entrenar')
+        ax_curve.set_ylabel('MAE')
+        ax_curve.set_yscale('log')
+        ax_curve.yaxis.set_major_formatter(FuncFormatter(lambda y_val, _: f"{y_val:.0f}"))
+        ax_curve.legend()
+    else:
+        ax_curve.axis('off')
+        ax_curve.text(0.5, 0.5, 'No se pudo estimar la curva de aprendizaje', ha='center', va='center')
+
+    ax_series = axes[1][0]
+    if final_val_pred is not None and final_val_target is not None:
+        ax_series.plot(final_val_target.index, final_val_target.values, label='Real', color='#2ca02c', linewidth=2)
+        ax_series.plot(final_val_target.index, final_val_pred, label='Predicción', color='#d62728', linestyle='--', linewidth=2)
+        ax_series.set_title('Validación final: Real vs Predicho', weight='bold')
+        ax_series.set_xlabel('Fecha')
+        ax_series.set_ylabel('Total de aeronaves')
+        ax_series.tick_params(axis='x', rotation=45)
+        ax_series.legend()
+    else:
+        ax_series.axis('off')
+        ax_series.text(0.5, 0.5, 'Sin predicciones para mostrar', ha='center', va='center')
+
+    ax_resid = axes[1][1]
+    if final_val_pred is not None and final_val_target is not None:
+        residuals = final_val_target.values - final_val_pred
+        sns.histplot(residuals, ax=ax_resid, kde=True, color='#9467bd')
+        ax_resid.axvline(0, color='black', linestyle='--', linewidth=1)
+        ax_resid.set_title('Distribución de residuales (Validación)', weight='bold')
+        ax_resid.set_xlabel('Residual (real - predicho)')
+        ax_resid.set_ylabel('Frecuencia')
+    else:
+        ax_resid.axis('off')
+        ax_resid.text(0.5, 0.5, 'Sin residuales disponibles', ha='center', va='center')
+
+    fig.text(
+        0.5,
+        0.02,
+        'Las métricas se reconstruyen usando el mejor modelo configurado en el estudio.'
+        ' Curvas logarítmicas permiten comparar la convergencia entre entrenamiento y validación.',
+        ha='center',
+        fontsize=11
+    )
+
+    plt.tight_layout(rect=[0, 0.04, 1, 0.97])
+    return fig
+
+
 def save_plots(study, output_dir='visualizations'):
     """Guarda todas las visualizaciones en archivos."""
     # Crear directorio si no existe
@@ -361,6 +586,13 @@ def save_plots(study, output_dir='visualizations'):
         plt.close(fig4)
     except Exception as e:
         print(f"No se pudo generar el gráfico de relaciones: {e}")
+
+    try:
+        fig5 = plot_best_model_learning_diagnostics(study)
+        fig5.savefig(f'{output_dir}/best_model_diagnostics.png', dpi=300, bbox_inches='tight')
+        plt.close(fig5)
+    except Exception as e:
+        print(f"No se pudo generar el diagnóstico del mejor modelo: {e}")
 
 def show_plots_interactive(study):
     """
@@ -418,11 +650,22 @@ def show_plots_interactive(study):
     except Exception as e:
         print(f"No se pudo mostrar la comparación de algoritmos: {e}")
 
+    # 4. Mostrar diagnósticos del mejor modelo
+    try:
+        print("\nMostrando diagnóstico del mejor modelo...")
+        fig = plot_best_model_learning_diagnostics(study)
+        if fig is not None:
+            plt.tight_layout()
+            plt.show()
+    except Exception as e:
+        print(f"No se pudo mostrar el diagnóstico del mejor modelo: {e}")
+
 if __name__ == "__main__":
     # Cargar el estudio
     try:
+        path = input("Introduzca la ruta al estudio: ")
         # Usar ruta relativa desde donde se ejecuta el script
-        db_path = os.path.join(os.path.dirname(__file__), 'optuna_storage/aircraft_forecasting.db')
+        db_path = os.path.join(os.path.dirname(__file__), path)
         storage_url = f"sqlite:///{db_path}"
         print(f"Intentando cargar estudio desde: {storage_url}")
         study = load_study(study_name="aircraft_forecasting_study", storage=storage_url)
