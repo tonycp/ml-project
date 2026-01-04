@@ -102,6 +102,42 @@ class ModelConfig:
     model_save_dir: Path = Path("models/saved_models")
     results_save_dir: Path = Path("models/results")
 
+    # Configuración de datos externos
+    external_data: Dict = None
+
+    def __post_init__(self):
+        if self.external_data is None:
+            self.external_data = {
+                'weather': {
+                    'enabled': True,
+                    'data_dir': Path('data/weather'),
+                    'stations': ['HAVANA_INTERNATIONAL'],
+                    'variables': [
+                        'temperature', 'humidity', 'wind_speed', 'wind_direction',
+                        'precipitation', 'visibility', 'cloud_cover', 'pressure',
+                        'is_storm', 'is_hurricane', 'high_winds', 'heavy_rain',
+                        'low_visibility', 'extreme_heat', 'extreme_cold'
+                    ]
+                },
+                'news': {
+                    'enabled': True,
+                    'data_dir': Path('data/news'),
+                    'sources': ['granma', 'juventud_rebelde', 'cuba_debate'],
+                    'event_types': ['ACCIDENTE', 'METEOROLOGICO', 'POLITICO', 'SOCIAL', 'INCIDENTE'],
+                    'event_features': [
+                        'accident_count', 'storm_alert_count', 'political_event_count',
+                        'social_event_count', 'incident_count', 'international_event_count',
+                        'has_major_event', 'event_impact_score'
+                    ]
+                },
+                'multimodal': {
+                    'enabled': True,
+                    'include_weather': True,
+                    'include_news': True,
+                    'feature_selection': 'auto'  # 'auto', 'manual', 'importance'
+                }
+            }
+
     def get_data_path(self, filename: str) -> Path:
         """Obtiene la ruta completa a un archivo de datos."""
         return self.data_dir / filename
