@@ -20,6 +20,7 @@ __version__ = "0.1.0"
 
 from .config import ModelConfig
 from .data_loader import ATCAircraftDataLoader
+from .external_data_loaders import WeatherDataLoader, NewsDataLoader, MultiModalDataLoader
 from .preprocessing import AircraftDataPreprocessor
 from .features import AircraftFeatureEngineer
 from .model import (
@@ -37,6 +38,9 @@ __all__ = [
 
     # Carga de datos
     'ATCAircraftDataLoader',
+    'WeatherDataLoader',
+    'NewsDataLoader',
+    'MultiModalDataLoader',
 
     # Preprocesamiento
     'AircraftDataPreprocessor',
