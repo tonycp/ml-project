@@ -325,52 +325,98 @@ class LSTMModel(BaseForecaster):
         try:
             import tensorflow as tf
             from tensorflow.keras.models import Sequential
-            from tensorflow.keras.layers import LSTM, Dense, Dropout
+            from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
             from tensorflow.keras.optimizers import Adam
             from sklearn.preprocessing import MinMaxScaler
+            from sklearn.exceptions import NotFittedError
 
             self.logger.info(f"Entrenando LSTM con sequence_length={self.sequence_length}")
+
+            # Validar datos de entrada
+            if X.isnull().values.any():
+                self.logger.warning("Se detectaron valores NaN en los datos de entrada. Reemplazando con ceros.")
+                X = X.fillna(0.0)
+            
+            if y.isnull().any():
+                self.logger.warning("Se detectaron valores NaN en el target. Reemplazando con ceros.")
+                y = y.fillna(0.0)
+
+            # Verificar que hay suficientes datos
+            if len(X) < self.sequence_length * 2:  # Necesitamos al menos 2 secuencias para entrenamiento
+                raise ValueError(f"No hay suficientes datos para entrenar. Se necesitan al menos {self.sequence_length * 2} muestras, pero solo hay {len(X)}")
 
             # Escalar datos
             self.scaler_X = MinMaxScaler()
             self.scaler_y = MinMaxScaler()
 
-            X_scaled = self.scaler_X.fit_transform(X)
-            y_scaled = self.scaler_y.fit_transform(y.values.reshape(-1, 1))
+            try:
+                X_scaled = self.scaler_X.fit_transform(X)
+                y_scaled = self.scaler_y.fit_transform(y.values.reshape(-1, 1)).ravel()
+            except Exception as e:
+                raise ValueError(f"Error al escalar los datos: {str(e)}")
 
             # Crear secuencias
-            X_seq, y_seq = self._create_sequences(X_scaled, y_scaled.ravel())
+            X_seq, y_seq = self._create_sequences(X_scaled, y_scaled)
+            
+            if len(X_seq) == 0 or len(y_seq) == 0:
+                raise ValueError("No se pudieron crear secuencias de entrenamiento. Verifique los datos de entrada.")
 
             # Construir modelo
-            self.model = Sequential([
-                LSTM(64, activation='relu', input_shape=(X_seq.shape[1], X_seq.shape[2]),
-                     return_sequences=True),
-                Dropout(self.lstm_config['dropout_rate']),
-                LSTM(32, activation='relu'),
-                Dropout(self.lstm_config['dropout_rate']),
-                Dense(1)
-            ])
+            try:
+                self.model = Sequential([
+                    Input(shape=(X_seq.shape[1], X_seq.shape[2])),
+                    LSTM(64, activation='relu', return_sequences=True),
+                    Dropout(self.lstm_config['dropout_rate']),
+                    LSTM(32, activation='relu'),
+                    Dropout(self.lstm_config['dropout_rate']),
+                    Dense(1)
+                ])
 
-            self.model.compile(
-                optimizer=Adam(learning_rate=self.lstm_config['learning_rate']),
-                loss='mse'
-            )
+                # Usar learning rate del config o valor por defecto
+                learning_rate = float(self.lstm_config.get('learning_rate', 0.001))
+                
+                self.model.compile(
+                    optimizer=Adam(learning_rate=learning_rate),
+                    loss='mse',
+                    metrics=['mae']
+                )
 
-            # Entrenar
-            self.model.fit(
-                X_seq, y_seq,
-                epochs=self.lstm_config['epochs'],
-                batch_size=self.lstm_config['batch_size'],
-                verbose=0
-            )
+                # Entrenar con validación
+                history = self.model.fit(
+                    X_seq, 
+                    y_seq,
+                    epochs=int(self.lstm_config.get('epochs', 100)),
+                    batch_size=int(self.lstm_config.get('batch_size', 32)),
+                    validation_split=0.1,
+                    verbose=0,
+                    callbacks=[
+                        tf.keras.callbacks.EarlyStopping(
+                            monitor='val_loss',
+                            patience=10,
+                            restore_best_weights=True
+                        )
+                    ]
+                )
 
-            self.is_trained = True
-            self.logger.info("LSTM entrenado exitosamente")
+                self.is_trained = True
+                self.logger.info("LSTM entrenado exitosamente")
+                self.logger.info(f"Pérdida final: {history.history['loss'][-1]:.4f}, MAE: {history.history['mae'][-1]:.4f}")
+                
+                if 'val_loss' in history.history:
+                    self.logger.info(f"Pérdida de validación: {history.history['val_loss'][-1]:.4f}, MAE de validación: {history.history['val_mae'][-1]:.4f}")
 
-        except ImportError:
-            raise ImportError("tensorflow no está instalado. Instale con: pip install tensorflow")
+            except Exception as e:
+                self.logger.error(f"Error al construir o entrenar el modelo: {str(e)}")
+                raise
+
+        except ImportError as e:
+            error_msg = "TensorFlow no está instalado. Instale con: pip install tensorflow"
+            self.logger.error(error_msg)
+            raise ImportError(error_msg) from e
+            
         except Exception as e:
-            self.logger.error(f"Error entrenando LSTM: {e}")
+            self.logger.error(f"Error inesperado durante el entrenamiento: {str(e)}")
+            self.is_trained = False
             raise
 
         return self
@@ -381,40 +427,68 @@ class LSTMModel(BaseForecaster):
             raise ValueError("Modelo no entrenado")
 
         try:
-            X_scaled = self.scaler_X.transform(X)
+            # Validar entrada
+            if X.isnull().values.any():
+                self.logger.warning("Se detectaron valores NaN en los datos de entrada. Reemplazando con ceros.")
+                X = X.fillna(0.0)
+            
+            # Verificar que hay suficientes datos
+            if len(X) < self.sequence_length:
+                self.logger.warning(f"No hay suficientes datos para hacer predicciones. Se necesitan al menos {self.sequence_length} puntos, pero solo hay {len(X)}.")
+                return np.zeros(len(X))
+            
+            # Escalar datos
+            try:
+                X_scaled = self.scaler_X.transform(X)
+            except Exception as e:
+                self.logger.error(f"Error al escalar datos: {e}")
+                return np.zeros(len(X))
             
             # Crear secuencias para predicción
-            X_seq, _ = self._create_sequences(X_scaled, np.zeros(len(X_scaled)))
+            try:
+                X_seq, _ = self._create_sequences(X_scaled, np.zeros(len(X_scaled)))
+                if len(X_seq) == 0:
+                    self.logger.error("No se pudieron crear secuencias para predicción")
+                    return np.zeros(len(X))
+            except Exception as e:
+                self.logger.error(f"Error al crear secuencias: {e}")
+                return np.zeros(len(X))
             
             # Hacer predicciones
-            predictions_scaled = self.model.predict(X_seq, verbose=0)
-            
-            # Verificar si hay NaN en las predicciones escaladas
-            if np.isnan(predictions_scaled).any():
-                self.logger.warning("Se detectaron valores NaN en las predicciones escaladas. Reemplazando con ceros.")
-                predictions_scaled = np.nan_to_num(predictions_scaled, nan=0.0)
-            
-            predictions = self.scaler_y.inverse_transform(predictions_scaled)
-            
-            # Verificar nuevamente después de la inversión de escala
-            if np.isnan(predictions).any():
-                self.logger.warning("Se detectaron valores NaN después de la inversión de escala. Reemplazando con ceros.")
-                predictions = np.nan_to_num(predictions, nan=0.0)
-            
-            # Crear un array completo con NaN para las primeras posiciones
-            full_predictions = np.full(len(X), np.nan)
-            
-            # Asegurarse de que las predicciones tengan la longitud correcta
-            if len(predictions) > len(X):
-                predictions = predictions[-len(X):]
-            
-            # Asegurarse de que no haya NaN en las predicciones finales
-            predictions = np.nan_to_num(predictions.ravel(), nan=0.0)
-            
-            # Asignar las predicciones al final del array
-            full_predictions[-len(predictions):] = predictions
-            
-            return full_predictions
+            try:
+                predictions_scaled = self.model.predict(X_seq, verbose=0)
+                
+                # Verificar predicciones
+                if np.isnan(predictions_scaled).any() or np.isinf(predictions_scaled).any():
+                    self.logger.warning("Se detectaron valores no válidos en las predicciones escaladas. Reemplazando con ceros.")
+                    predictions_scaled = np.nan_to_num(predictions_scaled, nan=0.0, posinf=0.0, neginf=0.0)
+                
+                # Invertir escalado
+                try:
+                    predictions = self.scaler_y.inverse_transform(predictions_scaled.reshape(-1, 1))
+                    
+                    if np.isnan(predictions).any() or np.isinf(predictions).any():
+                        self.logger.warning("Se detectaron valores no válidos después de la inversión de escala. Reemplazando con ceros.")
+                        predictions = np.nan_to_num(predictions, nan=0.0, posinf=0.0, neginf=0.0)
+                    
+                    # Crear array de salida
+                    full_predictions = np.zeros(len(X))
+                    start_idx = len(X) - len(predictions)
+                    full_predictions[start_idx:] = predictions.ravel()
+                    
+                    return full_predictions
+                    
+                except Exception as e:
+                    self.logger.error(f"Error al invertir el escalado: {e}")
+                    return np.zeros(len(X))
+                    
+            except Exception as e:
+                self.logger.error(f"Error al hacer predicciones: {e}")
+                return np.zeros(len(X))
+                
+        except Exception as e:
+            self.logger.error(f"Error en predicción LSTM: {str(e)}")
+            return np.zeros(len(X))
 
         except Exception as e:
             self.logger.error(f"Error en predicción LSTM: {e}")

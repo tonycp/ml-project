@@ -12,7 +12,7 @@ class ModelConfig:
     """Configuración general para los modelos de forecasting."""
 
     # Rutas de datos
-    data_dir: Path = Path("data/ATC csvs")
+    data_dir: Path = Path("/home/gabo/Personal/Universidad/04 - Cuarto Año/1er Semestre/Machine Learning/Proyectos/ml-project/models/data/ATC csvs")
     atc_daily_file: str = "atc_dayatcopsummary_202512301506.csv"
     atfm_hourly_file: str = "atfm_hourlyaoigroupflights_202512301506.csv"
     atfm_monthly_file: str = "atfm_monthrouteflights_202512301506.csv"
@@ -41,8 +41,20 @@ class ModelConfig:
     
     # Configuración de evaluación
     evaluation_config: Dict = None
+   
+    # Configuración de logging
+    log_level: str = "INFO"
+    log_file: Optional[str] = "logs/aircraft_forecasting.log"
+
+    # Configuración de guardado de modelos
+    model_save_dir: Path = Path("models/saved_models")
+    results_save_dir: Path = Path("models/results")
+
+    # Configuración de datos externos
+    external_data: Dict = None
 
     def __post_init__(self):
+
         if self.models is None:
             self.models = {
                 "arima": {
@@ -92,18 +104,6 @@ class ModelConfig:
                 "forecast_horizon": [1, 7, 14, 30],  # Predicciones a 1, 7, 14, 30 días
             }
 
-    # Configuración de logging
-    log_level: str = "INFO"
-    log_file: Optional[str] = "logs/aircraft_forecasting.log"
-
-    # Configuración de guardado de modelos
-    model_save_dir: Path = Path("models/saved_models")
-    results_save_dir: Path = Path("models/results")
-
-    # Configuración de datos externos
-    external_data: Dict = None
-
-    def __post_init__(self):
         if self.external_data is None:
             self.external_data = {
                 'weather': {

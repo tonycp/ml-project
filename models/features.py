@@ -73,11 +73,11 @@ class AircraftFeatureEngineer:
             df_featured = self._add_covid_adjustment(df_featured)
 
         # Features meteorológicas (si están disponibles)
-        if self._has_weather_data(df_featured):
+        if hasattr(self, "_has_weather_data" ) and self._has_weather_data(df_featured):
             df_featured = self._add_weather_features(df_featured)
 
         # Features de eventos noticiosos (si están disponibles)
-        if self._has_news_data(df_featured):
+        if hasattr(self, "_has_news_data") and self._has_news_data(df_featured):
             df_featured = self._add_news_event_features(df_featured)
 
         # Limpiar NaN generados por lags/rolling

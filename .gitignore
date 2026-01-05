@@ -421,3 +421,5 @@ FodyWeavers.xsd
 *.csv
 
 models/optuna_storage
+models/results
+models/visualizations

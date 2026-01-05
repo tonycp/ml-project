@@ -5,12 +5,13 @@ Script de entrenamiento para modelos de forecasting de aeronaves.
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
+from datetime import datetime
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 # Añadir el directorio padre al path para importar módulos
 sys.path.append(str(Path(__file__).parent.parent))
@@ -79,7 +80,7 @@ def main():
     parser.add_argument("--data-type", type=str, default="daily_atc",
                        choices=["daily_atc", "hourly_atfm", "monthly_route"],
                        help="Tipo de datos a usar")
-    parser.add_argument("--models", nargs="+", default=["arima", "prophet", "lstm", "ensemble"],
+    parser.add_argument("--models", nargs="+", default=["arima", "prophet", "lstm", "random_forest", "ensemble"],
                        help="Modelos a entrenar")
     parser.add_argument("--forecast-horizon", type=int, default=1,
                        help="Horizonte de predicción")
@@ -176,8 +177,13 @@ def main():
             best_model = min(successful_models, key=lambda x: x[1])
             logger.info(f"\nMejor modelo: {best_model[0]} (MAE: {best_model[1]:.2f})")
 
-            # Guardar resultados
-            results_file = config.get_results_path(f"training_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            # Asegurarse de que el directorio de resultados exista
+            results_dir = Path(__file__).parent / 'results'
+            results_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Crear nombre de archivo con timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            results_file = results_dir / f"training_{timestamp}_results.json"
             results_data = {
                 'timestamp': datetime.now().isoformat(),
                 'config': config.__dict__,
@@ -191,10 +197,23 @@ def main():
             }
 
             import json
-            with open(results_file, 'w') as f:
-                json.dump(results_data, f, indent=2, default=str)
-
-            logger.info(f"Resultados guardados en: {results_file}")
+            try:
+                with results_file.open('w') as f:
+                    json.dump(results_data, f, indent=2, default=str)
+                logger.info(f"Resultados guardados en {results_file}")
+            except Exception as e:
+                logger.error(f"Error al guardar los resultados: {e}")
+                # Intentar guardar en el directorio actual si falla
+                try:
+                    backup_file = Path(f"training_results_{timestamp}.json")
+                    with backup_file.open('w') as f:
+                        json.dump(results_data, f, indent=2, default=str)
+                    logger.info(f"Resultados guardados en {backup_file.absolute()}")
+                except Exception as e2:
+                    logger.error(f"Error al guardar el archivo de respaldo: {e2}")
+                    logger.info("Imprimiendo resultados en la consola...")
+                    print("\nResultados del entrenamiento:")
+                    print(json.dumps(results_data, indent=2, default=str))
 
         logger.info("Entrenamiento completado exitosamente")
         return 0
