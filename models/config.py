@@ -12,7 +12,7 @@ class ModelConfig:
     """Configuración general para los modelos de forecasting."""
 
     # Rutas de datos
-    data_dir: Path = Path("/home/gabo/Personal/Universidad/04 - Cuarto Año/1er Semestre/Machine Learning/Proyectos/ml-project/models/data/ATC csvs")
+    data_dir: Path = Path("data/ATC csvs")
     atc_daily_file: str = "atc_dayatcopsummary_202512301506.csv"
     atfm_hourly_file: str = "atfm_hourlyaoigroupflights_202512301506.csv"
     atfm_monthly_file: str = "atfm_monthrouteflights_202512301506.csv"
