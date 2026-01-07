@@ -1,49 +1,73 @@
 # Event Extractor
 
-Librería Python para extraer eventos (con fecha y tipo) de contenido de noticias en español.
+Sistema de extracción de eventos (con fecha y tipo) de contenido de noticias en español.
 
 ## Características
 
 - 🗓️ **Extracción de fechas**: Detecta fechas explícitas, relativas y rangos de fechas
 - 🏷️ **Clasificación de eventos**: Identifica tipos de eventos (cultural, deportivo, meteorológico, etc.)
-- �😢 **Clasificación de sentimiento**: Determina si los eventos son positivos, negativos o neutrales
-- �📊 **Pipeline completo**: Procesa noticias de extremo a extremo
+- 😢 **Clasificación de sentimiento**: Determina si los eventos son positivos, negativos o neutrales
+- 📊 **Pipeline completo**: Procesa noticias de extremo a extremo
 - 🔄 **Manejo de rangos**: Trata fechas de inicio y fin como eventos separados
 - 🇪🇸 **Optimizado para español**: Procesamiento de lenguaje natural en español
 
 ## Instalación
 
-### Desde el repositorio
+### 1. Clonar el repositorio
 
 ```bash
 git clone https://github.com/tonycp/ml-project.git
 cd ml-project
-pip install -e .
 ```
 
-### Dependencias adicionales
-
-El paquete requiere el modelo de spaCy para español:
+### 2. Instalar dependencias
 
 ```bash
-python -m spacy download es_core_news_sm
+pip install -r requirements.txt
+```
+
+### 3. Descargar modelo de spaCy
+
+```bash
+python -m spacy download es_core_news_lg
 ```
 
 ## Uso Básico
 
 ```python
-from Event_extractor import EventExtractionPipeline, NewsContent, NewsMetadata
+from Event_extractor import EventExtractionPipeline, NewsContent
 from datetime import datetime
 
 # Crear pipeline
 pipeline = EventExtractionPipeline()
 
 # Crear contenido de noticia
-metadata = NewsMetadata(
-    title="Festival de Música en la Ciudad",
-    date=datetime.now(),
-    source="Periódico Local"
+news = NewsContent(
+    text="El festival de música se realizará del 10 al 15 de enero de 2025 "
+         "en el parque central. Habrá conciertos de diferentes géneros.",
+    id="noticia_001",
+    date=datetime(2024, 12, 1)
 )
+
+# Extraer eventos
+events = pipeline.extract_events(news)
+
+# Mostrar resultados
+for event in events:
+    print(f"Fecha: {event.date}")
+    print(f"Tipo: {event.event_type}")
+    print(f"Sentimiento: {event.sentiment}")
+    print(f"Confianza: {event.confidence}")
+    print("---")
+```
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+from datetime import datetime
+
+# Crear pipeline
+pipeline = EventExtractionPipeline()
+
+# Crear contenido de noticia
 
 news = NewsContent(
     text="El festival de música se realizará del 10 al 15 de enero de 2025 "
@@ -114,7 +138,6 @@ Para **evitar fechas erróneas**, el extractor tiene un comportamiento seguro:
 - **Sin `reference_date`**: Solo extrae fechas **explícitas y completas** (con año)
 - **Con `reference_date`**: Extrae todos los tipos de fechas, usando la referencia para resolver ambigüedades
 
-El `reference_date` debe ser la **fecha de publicación de la noticia**. El pipeline lo usa automáticamente desde `NewsMetadata.date`.
 
 ### Importante: Manejo de Rangos
 
@@ -212,7 +235,6 @@ event_type, confidence = classifier.classify(
 Event_extractor/
 ├── __init__.py          # Punto de entrada principal
 ├── models/              # Modelos de datos
-│   ├── news.py         # NewsContent, NewsMetadata
 │   └── event.py        # Event, EventType
 ├── extractors/         # Extractores de información
 │   └── date_extractor.py

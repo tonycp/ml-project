@@ -8,10 +8,14 @@ from datetime import datetime
 from ..models.news import NewsContent
 from ..models.event import Event, EventType, EventSentiment
 from ..extractors.date_extractor import DateExtractor
-from ..classifiers.event_type_classifier import EventTypeClassifier
-from ..classifiers.event_sentiment_classifier import EventSentimentClassifier
-from ..utils.text_preprocessor import _tokenize_text
-
+from ..classifiers.news_type import KeywordNewsClassifier, SklearnNewsClassifier, NewsTypeClassifier
+from ..classifiers.sentiment import (
+    KeywordSentimentClassifier,
+    HuggingFaceSentimentClassifier,
+    SklearnSentimentClassifier,
+    SentimentClassifier
+)
+from ..utils.text_preprocessor import _tokenize_text, get_processed_text, extract_svo
 
 class EventExtractionPipeline:
     """
@@ -21,7 +25,8 @@ class EventExtractionPipeline:
     1. Recibe contenido de noticias (NewsContent)
     2. Extrae todas las fechas mencionadas en el texto
     3. Clasifica el tipo de evento
-    4. Crea un objeto Event para cada fecha encontrada
+    4. Clasifica el sentimiento del evento
+    5. Crea un objeto Event para cada fecha encontrada
     
     Cada fecha se trata como un evento separado, incluso si provienen
     del mismo rango de fechas (ej: inicio y fin de un festival).
@@ -31,7 +36,10 @@ class EventExtractionPipeline:
         self,
         reference_date: Optional[datetime] = None,
         min_confidence: float = 0.3,
-        classify_sentiment: bool = True
+        classify_sentiment: bool = True,
+        use_sklearn_classifier: bool = False,
+        sklearn_model_path: Optional[str] = None,
+        sentiment_classifier: Optional[SentimentClassifier] = None
     ):
         """
         Inicializa el pipeline de extracción.
@@ -39,18 +47,54 @@ class EventExtractionPipeline:
         Args:
             reference_date: Fecha de referencia para resolver fechas relativas.
                           Si no se proporciona, se usará la fecha de metadata de cada noticia.
-            min_confidence: Confianza mínima para aceptar una clasificación
+            min_confidence: Confianza mínima para aceptar una clasificación (default: 0.3)
             classify_sentiment: Si True, clasifica el sentimiento (positivo/negativo) de eventos
+            use_sklearn_classifier: Si True, usa el clasificador sklearn (TF-IDF + SVM)
+                                   en lugar del clasificador basado en keywords
+            sklearn_model_path: Ruta al modelo sklearn entrenado. Si None, usa el modelo
+                               por defecto (models/sklearn_spanish_svm.pkl)
+            sentiment_classifier: Clasificador de sentimiento personalizado. Si None, usa
+                                KeywordSentimentClassifier (por defecto)
         """
         self.default_reference_date = reference_date
-        self.type_classifier = EventTypeClassifier()
-        self.sentiment_classifier = EventSentimentClassifier()
         self.min_confidence = min_confidence
         self.classify_sentiment = classify_sentiment
+        self.use_sklearn_classifier = use_sklearn_classifier
+        
+        # Inicializar clasificador de tipos
+        if use_sklearn_classifier:
+            # Usar clasificador sklearn (TF-IDF + SVM)
+            if sklearn_model_path is None:
+                # Usar modelo por defecto
+                from pathlib import Path
+                project_root = Path(__file__).parent.parent.parent
+                sklearn_model_path = str(project_root / "models" / "sklearn_spanish_svm.pkl")
+            
+            self.type_classifier = SklearnNewsClassifier(
+                model_path=sklearn_model_path,
+                use_spacy_tokenizer=True
+            )
+        else:
+            # Usar clasificador basado en keywords (original)
+            self.type_classifier = KeywordNewsClassifier()
+        
+        # Inicializar clasificador de sentimiento
+        if sentiment_classifier is not None:
+            self.sentiment_classifier = sentiment_classifier
+        else:
+            # Usar clasificador basado en keywords (por defecto)
+            self.sentiment_classifier = KeywordSentimentClassifier()
     
     def extract_events(self, news_content: NewsContent) -> List[Event]:
         """
         Extrae eventos del contenido de una noticia.
+        
+        Este método realiza:
+        1. Extracción de fechas
+        2. Clasificación del tipo de evento
+        3. Clasificación del sentimiento
+        4. Extracción de entidades relacionadas (SVO)
+        5. Creación de eventos con toda la información
         
         Args:
             news_content: Contenido de la noticia a procesar
@@ -59,45 +103,56 @@ class EventExtractionPipeline:
             Lista de eventos extraídos, uno por cada fecha encontrada
         """
         # Determinar la fecha de referencia: primero del constructor, luego de la metadata
-        reference_date = self.default_reference_date or news_content.metadata.date
+        reference_date = self.default_reference_date or news_content.publication_date
         
-        # Preprocesar el texto (tokenización y limpieza)
+        # Obtener documento procesado con spaCy
+        doc = get_processed_text(news_content.text, force=True)
+
+        # Preprocess the text (tokenization and cleaning)
         processed_text = _tokenize_text(news_content.text)
-        processed_title = _tokenize_text(news_content.title) if news_content.title else None
-        
-        # Crear extractor de fechas con la fecha de referencia apropiada
+
+        # Create a date extractor with the appropriate reference date
         date_extractor = DateExtractor(reference_date=reference_date)
-        
-        # Extraer fechas del texto preprocesado
+
+        # Extract dates from the preprocessed text
         dates = date_extractor.extract_dates(processed_text)
         
-        # Si no se encontraron fechas, intentar con el título preprocesado
-        if not dates and processed_title:
-            dates = date_extractor.extract_dates(processed_title)
-        
-        # TODO: Revisar esto, puede q la fecha de publicacion no sea confiable
-        # Si aún no hay fechas, usar la fecha de publicación de la noticia
-        if not dates and news_content.metadata.date:
-            dates = [news_content.metadata.date]
-        
-        # Clasificar el tipo de evento usando el texto preprocesado (como string)
+        # Si no hay fechas, la noticia no tiene eventos temporales
+        if not dates:
+            return []
+
+        # If no dates are found, use the publication date of the news
+        if not dates and news_content.publication_date:
+            dates = [news_content.publication_date]
+
+        # Classify the type of event using the preprocessed text (as a string)
         text_to_classify = ' '.join(processed_text)
-        if processed_title:
-            text_to_classify = f"{' '.join(processed_title)}. {text_to_classify}"
-        event_type, confidence = self.type_classifier.classify(
-            text_to_classify,
-            threshold=self.min_confidence
-        )
         
-        # Clasificar el sentimiento del evento
+        if self.use_sklearn_classifier:
+            # Usar clasificador sklearn (devuelve EventType directamente)
+            event_type, confidence = self.type_classifier.predict(text_to_classify)
+        else:
+            # Usar clasificador basado en keywords (original)
+            event_type, confidence = self.type_classifier.classify(
+                text_to_classify,
+                threshold=self.min_confidence
+            )
+
+        # Classify the sentiment of the event
         sentiment = EventSentiment.NEUTRAL
         sentiment_confidence = 1.0
-        
+
         if self.classify_sentiment:
             sentiment, sentiment_confidence = self.sentiment_classifier.classify(
                 text_to_classify,
                 threshold=self.min_confidence
             )
+        
+        # Extraer entidades relacionadas usando SVO (Subject-Verb-Object)
+        svo_triples = extract_svo(doc)
+        
+        # Consolidar entidades únicas del texto y SVO
+        entidades = self._extract_entities_from_doc(doc, svo_triples)
         
         # Crear un evento para cada fecha encontrada
         events = []
@@ -106,9 +161,8 @@ class EventExtractionPipeline:
                 date=date,
                 event_type=event_type,
                 sentiment=sentiment,
-                title=news_content.title or news_content.metadata.title,
-                description=self._extract_description(news_content.text),
-                source_news_id=news_content.metadata.url,
+                source_news_id=news_content.id,
+                entidades_asociadas=entidades,
                 confidence=confidence,
                 sentiment_confidence=sentiment_confidence
             )
@@ -137,28 +191,101 @@ class EventExtractionPipeline:
         
         return all_events
     
-    def _extract_description(self, text: str, max_length: int = 200) -> str:
+    def _extract_entities_from_doc(self, doc, svo_triples: List[tuple]) -> List[dict]:
         """
-        Extrae una descripción resumida del texto.
+        Extrae entidades nombradas y sus roles desde el documento spaCy y triples SVO.
         
         Args:
-            text: Texto completo
-            max_length: Longitud máxima de la descripción
+            doc: Documento spaCy procesado
+            svo_triples: Lista de tuplas (sujeto_texto, verbo_texto, objeto_texto)
             
         Returns:
-            Descripción resumida
+            Lista de diccionarios con información de entidades:
+            [
+                {
+                    'text': 'El Gobierno español',
+                    'role': 'subject',
+                    'action': 'anunció',
+                    'ent_type': 'ORG'
+                },
+                ...
+            ]
         """
-        if len(text) <= max_length:
-            return text
+        entities = []
+        seen_entities = set()  # Para evitar duplicados
         
-        # Buscar el final de la primera oración
-        for i, char in enumerate(text[:max_length + 50]):
-            if char in '.!?' and i > max_length // 2:
-                return text[:i + 1].strip()
+        # 1. Extraer entidades nombradas del documento (personas, organizaciones, lugares, etc.)
+        for ent in doc.ents:
+            entity_key = (ent.text.lower(), ent.label_)
+            if entity_key not in seen_entities:
+                seen_entities.add(entity_key)
+                entities.append({
+                    'text': ent.text,
+                    'lemma': ent.lemma_,
+                    'role': 'named_entity',
+                    'action': None,
+                    'ent_type': ent.label_  # PER, ORG, LOC, MISC, etc.
+                })
         
-        # Si no se encuentra un punto, cortar en la última palabra completa
-        truncated = text[:max_length].rsplit(' ', 1)[0]
-        return truncated + '...'
+        # 2. Extraer información de los triples SVO (sujeto-verbo-objeto)
+        for subject_text, verb_text, object_text in svo_triples:
+            # Procesar sujeto
+            if subject_text and subject_text.strip():
+                entity_key = (subject_text.lower(), 'subject')
+                if entity_key not in seen_entities:
+                    seen_entities.add(entity_key)
+                    entities.append({
+                        'text': subject_text,
+                        'lemma': subject_text.lower(),  # Simplificado
+                        'role': 'subject',
+                        'action': verb_text,
+                        'ent_type': self._detect_entity_type(subject_text, doc)
+                    })
+            
+            # Procesar objeto
+            if object_text and object_text.strip():
+                entity_key = (object_text.lower(), 'object')
+                if entity_key not in seen_entities:
+                    seen_entities.add(entity_key)
+                    entities.append({
+                        'text': object_text,
+                        'lemma': object_text.lower(),  # Simplificado
+                        'role': 'object',
+                        'action': verb_text,
+                        'ent_type': self._detect_entity_type(object_text, doc)
+                    })
+            
+            # Procesar verbo como acción principal
+            if verb_text and verb_text.strip():
+                verb_key = (verb_text.lower(), 'action')
+                if verb_key not in seen_entities:
+                    seen_entities.add(verb_key)
+                    entities.append({
+                        'text': verb_text,
+                        'lemma': verb_text.lower(),
+                        'role': 'action',
+                        'action': None,
+                        'ent_type': None
+                    })
+        
+        return entities
+    
+    def _detect_entity_type(self, text: str, doc) -> Optional[str]:
+        """
+        Detecta el tipo de entidad buscando en el documento spaCy.
+        
+        Args:
+            text: Texto de la entidad
+            doc: Documento spaCy
+            
+        Returns:
+            Tipo de entidad (PER, ORG, LOC, etc.) o None
+        """
+        text_lower = text.lower()
+        for ent in doc.ents:
+            if text_lower in ent.text.lower() or ent.text.lower() in text_lower:
+                return ent.label_
+        return None
     
     def set_min_confidence(self, confidence: float):
         """

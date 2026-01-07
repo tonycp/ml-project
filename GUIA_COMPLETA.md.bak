@@ -1,0 +1,1404 @@
+# Guía Completa del Sistema de Extracción de Eventos
+
+Esta guía documenta todos los archivos del proyecto y explica cómo usar el sistema paso a paso.
+
+---
+
+## 📋 Tabla de Contenidos
+
+1. [Resumen del Sistema](#resumen-del-sistema)
+2. [Instalación](#instalación)
+3. [Uso Rápido](#uso-rápido)
+4. [Estructura del Proyecto](#estructura-del-proyecto)
+5. [Documentación de Archivos](#documentación-de-archivos)
+6. [Guía de Uso Detallada](#guía-de-uso-detallada)
+7. [Ejemplos Prácticos](#ejemplos-prácticos)
+8. [Configuración Avanzada](#configuración-avanzada)
+
+---
+
+## Resumen del Sistema
+
+El **Event Extractor** es un sistema de procesamiento de lenguaje natural para extraer eventos estructurados de noticias en español. Identifica:
+
+- **Fechas**: Cuándo ocurre el evento (explícitas, relativas, rangos)
+- **Tipo de evento**: Qué categoría (cultural, deportivo, político, etc.)
+- **Sentimiento**: Cómo se percibe (positivo, negativo, neutral)
+- **Entidades**: Quién/qué está involucrado (personas, lugares, organizaciones)
+- **Relaciones**: Sujeto-Verbo-Objeto (SVO triples)
+
+---
+
+## Instalación
+
+### Requisitos
+- Python 3.8 o superior
+- pip
+
+### Pasos
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/tonycp/ml-project.git
+cd ml-project
+
+# 2. (Opcional pero recomendado) Crear entorno virtual
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# o
+.venv\Scripts\activate  # Windows
+
+# 3. Instalar dependencias
+pip install -r requirements.txt
+
+# 4. Descargar modelo de spaCy para español
+python -m spacy download es_core_news_lg
+```
+
+---
+
+## Uso Rápido
+
+### Ejemplo Básico (5 líneas)
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+
+# 1. Crear el pipeline
+pipeline = EventExtractionPipeline()
+
+# 2. Crear la noticia
+news = NewsContent(
+    text="El festival de música se realizará mañana en el parque central.",
+    id="noticia_001"
+)
+
+# 3. Extraer eventos
+events = pipeline.extract_events(news)
+
+# 4. Ver resultados
+for event in events:
+    print(f"Fecha: {event.date}")
+    print(f"Tipo: {event.event_type.value}")
+    print(f"Sentimiento: {event.sentiment.value}")
+    print(f"Entidades: {event.entidades_asociadas}")
+    print("---")
+```
+
+### Salida Esperada
+
+```
+Fecha: 2026-01-07 00:00:00
+Tipo: cultural
+Sentimiento: positivo
+Entidades: [{'text': 'festival de música', 'role': 'subject'}, ...]
+---
+```
+
+---
+
+## Estructura del Proyecto
+
+```
+ml-project/
+│
+├── Event_extractor/          # 📦 Código fuente principal
+│   ├── __init__.py
+│   ├── event_extractor.py    # Clase legacy (compatibilidad)
+│   │
+│   ├── models/               # 📊 Modelos de datos
+│   │   ├── event.py          # Clase Event (evento extraído)
+│   │   └── news.py           # Clase NewsContent (noticia de entrada)
+│   │
+│   ├── extractors/           # 🔍 Extractores de información
+│   │   ├── date_extractor.py    # Extrae fechas del texto
+│   │   └── NER_extractor.py     # Extrae entidades nombradas + SVO
+│   │
+│   ├── classifiers/          # 🏷️ Clasificadores
+│   │   ├── news_type/           # Tipo de evento
+│   │   │   ├── base.py             # Clase base
+│   │   │   ├── keyword_classifier.py   # Por palabras clave
+│   │   │   └── sklearn_classifier.py   # Machine learning
+│   │   │
+│   │   ├── sentiment/           # Sentimiento
+│   │   │   ├── base.py             # Clase base
+│   │   │   ├── keyword_classifier.py   # Por palabras clave
+│   │   │   ├── sklearn_classifier.py   # Machine learning
+│   │   │   └── huggingface_classifier.py  # Transformers (BETO, etc.)
+│   │   │
+│   │   └── ml/                  # Utilidades ML
+│   │       ├── corpus_loaders.py   # Carga corpus TASS, etc.
+│   │       └── model_configs.py    # Configuraciones de modelos
+│   │
+│   ├── pipeline/             # 🔄 Pipeline de procesamiento
+│   │   └── event_pipeline.py    # EventExtractionPipeline (clase principal)
+│   │
+│   └── utils/                # 🛠️ Utilidades
+│       └── text_preprocessor.py # Limpieza y normalización de texto
+│
+├── examples/                 # 📚 Ejemplos de uso
+│   ├── 01_basic_usage.py         # Uso básico
+│   ├── 02_component_usage.py     # Componentes individuales
+│   ├── 03_reference_date_demo.py # Fechas de referencia
+│   ├── 04_extract_from_database.py  # Carga desde SQLite
+│   ├── 05_test_manual_news.py    # Testing interactivo
+│   ├── 06_integrated_pipeline_demo.py  # Demo completo
+│   ├── 07_sentiment_classification_demo.py
+│   ├── 08_pipeline_with_sentiment.py
+│   ├── 09_pipeline_with_sklearn_demo.py
+│   │
+│   ├── comparisons/          # Comparación de modelos
+│   │   ├── compare_sentiment_classifiers.py
+│   │   ├── compare_sklearn_models.py
+│   │   ├── model_corpus_comparison.py
+│   │   └── tass_sklearn_demo.py
+│   │
+│   ├── training/             # Entrenamiento de modelos
+│   │   ├── train_sentiment_sklearn.py
+│   │   └── train_sklearn_model.py
+│   │
+│   └── templates/            # Templates reutilizables
+│       └── data_loader_template.py
+│
+├── models/                   # 💾 Modelos entrenados
+│   └── sklearn_news_classifier_simple.pkl
+│
+├── noticias.db              # 🗄️ Base de datos de ejemplo (SQLite)
+│
+├── README.md                # Documentación principal
+├── QUICKSTART.md            # Guía rápida
+├── ARCHITECTURE.md          # Arquitectura del sistema
+├── requirements.txt         # Dependencias
+└── LICENSE                  # Licencia MIT
+```
+
+---
+
+## Documentación de Archivos
+
+### 📦 Event_extractor/ (Código Principal)
+
+#### **`__init__.py`**
+Punto de entrada del paquete. Exporta las clases principales:
+- `EventExtractionPipeline`: Pipeline completo
+- `NewsContent`: Modelo de noticia
+- `Event`: Modelo de evento
+- `EventType`, `EventSentiment`: Enums
+- Extractores y clasificadores individuales
+
+**Uso:**
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+```
+
+---
+
+#### **`event_extractor.py`**
+Clase legacy `NewsProcessor` para compatibilidad con versiones anteriores. 
+**No usar directamente** - usar `EventExtractionPipeline` en su lugar.
+
+---
+
+### 📊 Event_extractor/models/ (Modelos de Datos)
+
+#### **`news.py`** - Clase `NewsContent`
+Representa una noticia de entrada.
+
+**Atributos:**
+- `id`: str - Identificador único
+- `text`: str - Contenido de la noticia
+- `date`: Optional[datetime] - Fecha de publicación (fecha de referencia)
+- `source`: Optional[str] - Fuente de la noticia
+
+**Ejemplo:**
+```python
+from Event_extractor.models import NewsContent
+from datetime import datetime
+
+news = NewsContent(
+    id="noticia_123",
+    text="El concierto será mañana a las 8pm.",
+    date=datetime(2026, 1, 6),  # Fecha de referencia
+    source="Diario Nacional"
+)
+```
+
+**Por qué es importante `date`:**
+- Resuelve fechas relativas ("mañana", "la próxima semana")
+- Evita ambigüedades ("15 de enero" → ¿de qué año?)
+- Si no se proporciona, usa la fecha actual
+
+---
+
+#### **`event.py`** - Clase `Event`
+Representa un evento extraído.
+
+**Atributos:**
+- `date`: datetime - Fecha del evento
+- `event_type`: EventType - Tipo (CULTURAL, DEPORTIVO, etc.)
+- `sentiment`: EventSentiment - Sentimiento (POSITIVO, NEGATIVO, NEUTRAL)
+- `source_news_id`: str - ID de la noticia origen
+- `entidades_asociadas`: Optional[List[dict]] - Entidades y relaciones
+- `confidence`: float - Confianza en el tipo (0.0-1.0)
+- `sentiment_confidence`: float - Confianza en el sentimiento (0.0-1.0)
+
+**Enums:**
+```python
+EventType:
+    CULTURAL, DEPORTIVO, METEOROLOGICO, POLITICO, 
+    ECONOMICO, SOCIAL, INCIDENTE, REGULACION, OTRO
+
+EventSentiment:
+    POSITIVO, NEGATIVO, NEUTRAL
+```
+
+**Ejemplo:**
+```python
+# Los eventos se crean automáticamente por el pipeline
+for event in events:
+    print(f"Tipo: {event.event_type.value}")
+    print(f"Sentimiento: {event.sentiment.value}")
+    print(f"Confianza tipo: {event.confidence:.2%}")
+    print(f"Confianza sentimiento: {event.sentiment_confidence:.2%}")
+```
+
+---
+
+### 🔍 Event_extractor/extractors/ (Extractores)
+
+#### **`date_extractor.py`** - Clase `DateExtractor`
+Extrae fechas del texto de noticias.
+
+**Características:**
+- Fechas explícitas: "25 de diciembre de 2024"
+- Fechas numéricas: "25/12/2024", "2024-12-25"
+- Fechas parciales: "15 de enero" (infiere el año)
+- Fechas relativas: "mañana", "la próxima semana", "dentro de 3 días"
+- Rangos: "del 10 al 15 de enero" → [10/01, 15/01]
+- Días de la semana: "el próximo lunes"
+
+**Uso individual:**
+```python
+from Event_extractor.extractors import DateExtractor
+from datetime import datetime
+
+extractor = DateExtractor()
+
+# Con fecha de referencia
+text = "El evento será mañana y pasado mañana"
+reference_date = datetime(2026, 1, 6)
+dates = extractor.extract_dates(text, reference_date)
+# → [datetime(2026, 1, 7), datetime(2026, 1, 8)]
+
+# Sin fecha de referencia (usa fecha actual)
+dates = extractor.extract_dates("El 25 de diciembre")
+```
+
+**Parámetros importantes:**
+- `reference_date`: datetime para resolver fechas relativas
+- Retorna: List[datetime]
+
+---
+
+#### **`NER_extractor.py`** - Funciones de NER
+Extrae entidades nombradas y relaciones sujeto-verbo-objeto.
+
+**Funciones principales:**
+
+1. **`extract_entities(doc: spacy.Doc) -> List[dict]`**
+   Extrae entidades nombradas usando spaCy.
+   ```python
+   from Event_extractor.extractors import extract_entities
+   import spacy
+   
+   nlp = spacy.load("es_core_news_lg")
+   doc = nlp("Díaz-Canel visitó Cuba")
+   entities = extract_entities(doc)
+   # → [{'text': 'Díaz-Canel', 'label': 'PER', 'start': 0, 'end': 11}]
+   ```
+
+2. **`extract_svo(doc: spacy.Doc) -> List[dict]`**
+   Extrae triples Sujeto-Verbo-Objeto.
+   ```python
+   svo_triples = extract_svo(doc)
+   # → [{'subject': 'Díaz-Canel', 'verb': 'visitó', 'object': 'Cuba'}]
+   ```
+
+**Etiquetas de entidades (spaCy):**
+- `PER`: Personas
+- `ORG`: Organizaciones
+- `LOC`: Lugares
+- `MISC`: Miscelánea
+
+---
+
+### 🏷️ Event_extractor/classifiers/ (Clasificadores)
+
+#### **news_type/** - Clasificadores de Tipo de Evento
+
+##### **`base.py`** - Clase `NewsTypeClassifier`
+Clase base abstracta para clasificadores de tipo.
+
+**Métodos:**
+- `classify(text: str) -> Tuple[EventType, float]`
+- `classify_batch(texts: List[str]) -> List[Tuple[EventType, float]]`
+
+##### **`keyword_classifier.py`** - `KeywordNewsTypeClassifier`
+Clasificador basado en palabras clave (reglas).
+
+**Ventajas:**
+- Rápido
+- No requiere entrenamiento
+- Interpretable
+
+**Desventajas:**
+- Menos preciso que ML
+- Requiere mantenimiento manual
+
+**Uso:**
+```python
+from Event_extractor.classifiers.news_type import KeywordNewsTypeClassifier
+
+classifier = KeywordNewsTypeClassifier()
+event_type, confidence = classifier.classify("Habrá un concierto de rock")
+# → (EventType.CULTURAL, 0.95)
+```
+
+**Palabras clave por tipo:**
+- CULTURAL: festival, concierto, exposición, teatro, cine
+- DEPORTIVO: partido, campeonato, torneo, juego
+- POLITICO: elecciones, ley, decreto, gobierno
+- etc.
+
+##### **`sklearn_classifier.py`** - `SklearnNewsTypeClassifier`
+Clasificador basado en machine learning (TF-IDF + sklearn).
+
+**Ventajas:**
+- Más preciso
+- Aprende patrones complejos
+- Generaliza mejor
+
+**Desventajas:**
+- Requiere entrenamiento
+- Más lento
+- Menos interpretable
+
+**Uso:**
+```python
+from Event_extractor.classifiers.news_type import SklearnNewsTypeClassifier
+
+# Opción 1: Cargar modelo entrenado
+classifier = SklearnNewsTypeClassifier(model_path="models/news_classifier.pkl")
+
+# Opción 2: Entrenar nuevo modelo
+classifier = SklearnNewsTypeClassifier()
+classifier.train(texts, labels)
+classifier.save("models/mi_modelo.pkl")
+
+# Clasificar
+event_type, confidence = classifier.classify(text)
+```
+
+---
+
+#### **sentiment/** - Clasificadores de Sentimiento
+
+##### **`base.py`** - Clase `SentimentClassifier`
+Clase base abstracta para clasificadores de sentimiento.
+
+**Métodos:**
+- `classify(text: str) -> Tuple[EventSentiment, float]`
+- `classify_batch(texts: List[str]) -> List[Tuple[EventSentiment, float]]`
+
+##### **`keyword_classifier.py`** - `KeywordSentimentClassifier`
+Clasificador de sentimiento basado en palabras clave.
+
+**Palabras clave:**
+- POSITIVO: éxito, victoria, celebración, logro, inauguración
+- NEGATIVO: cancelación, problema, accidente, crisis, fracaso
+- NEUTRAL: reunión, conferencia, anuncio, trámite
+
+**Uso:**
+```python
+from Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
+
+classifier = KeywordSentimentClassifier()
+sentiment, conf = classifier.classify("Gran celebración del aniversario")
+# → (EventSentiment.POSITIVO, 0.9)
+```
+
+##### **`sklearn_classifier.py`** - `SklearnSentimentClassifier`
+Clasificador ML usando corpus TASS-2019.
+
+**Corpus TASS:**
+- 1,125 tweets de entrenamiento
+- 1,706 tweets de test
+- Etiquetas: positivo, negativo, neutral
+- Idioma: español
+
+**Algoritmos disponibles:**
+- LinearSVC (default, más rápido)
+- MultinomialNB
+- LogisticRegression
+- RandomForestClassifier
+
+**Uso:**
+```python
+from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+
+# Con modelo pre-entrenado
+classifier = SklearnSentimentClassifier(
+    model_path="models/sentiment_model.pkl"
+)
+
+# Entrenar nuevo
+classifier = SklearnSentimentClassifier(algorithm="LinearSVC")
+classifier.train_on_tass()  # Descarga y entrena automáticamente
+classifier.save("models/mi_sentimiento.pkl")
+
+# Clasificar
+sentiment, confidence = classifier.classify("Terrible accidente en la autopista")
+# → (EventSentiment.NEGATIVO, 0.87)
+```
+
+##### **`huggingface_classifier.py`** - `HuggingFaceSentimentClassifier`
+Clasificador usando transformers (BETO, RoBERTa-BNE, etc.).
+
+**Modelos recomendados:**
+- `dccuchile/bert-base-spanish-wwm-cased` (BETO)
+- `PlanTL-GOB-ES/roberta-base-bne` (RoBERTa español)
+- `finiteautomata/beto-sentiment-analysis`
+
+**Uso:**
+```python
+from Event_extractor.classifiers.sentiment import HuggingFaceSentimentClassifier
+
+classifier = HuggingFaceSentimentClassifier(
+    model_name="finiteautomata/beto-sentiment-analysis"
+)
+
+sentiment, confidence = classifier.classify(text)
+```
+
+**Nota:** Requiere instalar transformers:
+```bash
+pip install transformers torch
+```
+
+---
+
+#### **ml/** - Utilidades de Machine Learning
+
+##### **`corpus_loaders.py`**
+Funciones para cargar corpus de entrenamiento.
+
+**Funciones:**
+- `load_tass_corpus()`: Carga TASS-2019 (sentimiento)
+- `load_custom_corpus()`: Carga corpus personalizado
+
+**Uso:**
+```python
+from Event_extractor.classifiers.ml import load_tass_corpus
+
+train_texts, train_labels, test_texts, test_labels = load_tass_corpus()
+print(f"Entrenamiento: {len(train_texts)} ejemplos")
+print(f"Test: {len(test_texts)} ejemplos")
+```
+
+##### **`model_configs.py`**
+Configuraciones predefinidas para modelos ML.
+
+**Configuraciones:**
+- Parámetros de TF-IDF
+- Hiperparámetros de sklearn
+- Configuraciones de transformers
+
+---
+
+### 🔄 Event_extractor/pipeline/ (Pipeline Principal)
+
+#### **`event_pipeline.py`** - Clase `EventExtractionPipeline`
+**LA CLASE MÁS IMPORTANTE** - Orquesta todo el proceso de extracción.
+
+**Constructor:**
+```python
+EventExtractionPipeline(
+    type_classifier="keyword",     # o instancia de NewsTypeClassifier
+    sentiment_classifier="keyword", # o instancia de SentimentClassifier
+    spacy_model="es_core_news_lg"
+)
+```
+
+**Parámetros:**
+- `type_classifier`: 
+  - `"keyword"`: KeywordNewsTypeClassifier (default)
+  - `"sklearn"`: SklearnNewsTypeClassifier
+  - O una instancia personalizada
+  
+- `sentiment_classifier`:
+  - `"keyword"`: KeywordSentimentClassifier (default)
+  - `"sklearn"`: SklearnSentimentClassifier con TASS
+  - O una instancia personalizada
+
+- `spacy_model`: Modelo de spaCy a usar
+
+**Método principal:**
+```python
+extract_events(news: NewsContent, reference_date: Optional[datetime] = None) -> List[Event]
+```
+
+**Proceso interno:**
+1. **Preprocesar texto** (limpieza, normalización)
+2. **Procesar con spaCy** (tokenización, POS tagging, parsing)
+3. **Extraer fechas** usando DateExtractor
+4. **Clasificar tipo** usando type_classifier
+5. **Clasificar sentimiento** usando sentiment_classifier
+6. **Extraer entidades** (NER + SVO)
+7. **Crear objetos Event** con toda la información
+8. **Retornar lista de eventos**
+
+**Ejemplo completo:**
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+from datetime import datetime
+
+# Pipeline con clasificadores por defecto (keyword)
+pipeline = EventExtractionPipeline()
+
+# Pipeline con clasificadores ML
+from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+sentiment_clf = SklearnSentimentClassifier()
+sentiment_clf.train_on_tass()
+
+pipeline = EventExtractionPipeline(
+    type_classifier="sklearn",
+    sentiment_classifier=sentiment_clf
+)
+
+# Extraer eventos
+news = NewsContent(
+    id="n1",
+    text="El gran festival de música será del 10 al 15 de enero. "
+         "Habrá conciertos de rock y jazz.",
+    date=datetime(2025, 12, 1)
+)
+
+events = pipeline.extract_events(news)
+
+# Procesar resultados
+for i, event in enumerate(events, 1):
+    print(f"\n=== Evento {i} ===")
+    print(f"Fecha: {event.date.strftime('%d/%m/%Y')}")
+    print(f"Tipo: {event.event_type.value} (confianza: {event.confidence:.0%})")
+    print(f"Sentimiento: {event.sentiment.value} (confianza: {event.sentiment_confidence:.0%})")
+    
+    if event.entidades_asociadas:
+        print("Entidades:")
+        for ent in event.entidades_asociadas:
+            print(f"  - {ent['text']} ({ent['role']})")
+```
+
+---
+
+### 🛠️ Event_extractor/utils/ (Utilidades)
+
+#### **`text_preprocessor.py`**
+Funciones de preprocesamiento de texto.
+
+**Funciones:**
+- `clean_text(text: str) -> str`: Limpia caracteres especiales
+- `normalize_text(text: str) -> str`: Normaliza espacios, puntuación
+- `remove_urls(text: str) -> str`: Elimina URLs
+- `remove_emojis(text: str) -> str`: Elimina emojis
+
+**Uso:**
+```python
+from Event_extractor.utils import clean_text, normalize_text
+
+text = "   El evento será mañana!!!    "
+text = clean_text(text)
+text = normalize_text(text)
+# → "El evento será mañana."
+```
+
+---
+
+## 📚 examples/ (Ejemplos)
+
+### Ejemplos Básicos (01-03)
+
+#### **`01_basic_usage.py`**
+Ejemplo más simple posible. Extrae eventos de una noticia de texto.
+
+**Ejecutar:**
+```bash
+python examples/01_basic_usage.py
+```
+
+**Qué hace:**
+- Crea un pipeline básico
+- Procesa una noticia de ejemplo
+- Muestra los eventos extraídos
+
+---
+
+#### **`02_component_usage.py`**
+Muestra cómo usar componentes individuales (extractores, clasificadores).
+
+**Qué aprenderás:**
+- Usar DateExtractor solo
+- Usar clasificadores de tipo solo
+- Usar clasificadores de sentimiento solo
+- Usar extractores de NER solo
+
+---
+
+#### **`03_reference_date_demo.py`**
+Demuestra el uso de fechas de referencia.
+
+**Qué aprenderás:**
+- Por qué son importantes las fechas de referencia
+- Cómo resolver fechas relativas
+- Problemas con fechas ambiguas
+
+---
+
+### Ejemplos con Datos Reales (04-05)
+
+#### **`04_extract_from_database.py`**
+Carga noticias desde la base de datos SQLite `noticias.db` y extrae eventos.
+
+**Qué hace:**
+- Conecta a SQLite
+- Lee noticias de la tabla
+- Procesa en batch
+- Genera estadísticas:
+  - Distribución de tipos
+  - Distribución de sentimientos
+  - Top entidades
+  - Timeline de eventos
+
+**Ejecutar:**
+```bash
+python examples/04_extract_from_database.py
+```
+
+**Requisitos:**
+- Archivo `noticias.db` en el directorio raíz
+
+---
+
+#### **`05_test_manual_news.py`**
+Herramienta interactiva para probar el pipeline con tus propias noticias.
+
+**Qué hace:**
+- Pide texto de noticia (terminar con doble Enter)
+- Opcionalmente pide fecha de referencia
+- Muestra paso a paso:
+  1. Tokenización
+  2. NER
+  3. Extracción de fechas
+  4. Clasificación de tipo
+  5. Clasificación de sentimiento
+  6. Extracción SVO
+- Muestra el evento final completo
+
+**Ejecutar:**
+```bash
+python examples/05_test_manual_news.py
+```
+
+**Ejemplo de uso:**
+```
+Ingresa el texto de la noticia (doble Enter para terminar):
+El presidente anunciará nuevas medidas económicas mañana en una rueda de prensa.
+
+¿Fecha de referencia? (DD/MM/YYYY, Enter para usar hoy): 15/12/2025
+
+[Muestra procesamiento detallado...]
+```
+
+---
+
+### Ejemplos de Pipeline Completo (06-09)
+
+#### **`06_integrated_pipeline_demo.py`**
+Demo completo con noticias sintéticas variadas.
+
+**Incluye:**
+- Múltiples tipos de eventos
+- Rangos de fechas
+- Diferentes sentimientos
+- Estadísticas completas
+
+---
+
+#### **`07_sentiment_classification_demo.py`**
+Enfocado en clasificación de sentimiento.
+
+**Compara:**
+- Keyword classifier
+- Sklearn classifier
+- Diferentes textos
+
+---
+
+#### **`08_pipeline_with_sentiment.py`**
+Muestra cómo usar diferentes clasificadores de sentimiento intercambiables.
+
+---
+
+#### **`09_pipeline_with_sklearn_demo.py`**
+Pipeline usando clasificadores ML (sklearn).
+
+---
+
+### Comparaciones (comparisons/)
+
+#### **`compare_sentiment_classifiers.py`**
+Compara los 3 tipos de clasificadores de sentimiento.
+
+**Métricas:**
+- Accuracy
+- Precision/Recall/F1 por clase
+- Velocidad
+
+---
+
+#### **`compare_sklearn_models.py`**
+Compara algoritmos de sklearn en TASS.
+
+**Modelos comparados:**
+- LinearSVC
+- MultinomialNB
+- LogisticRegression
+- RandomForestClassifier
+
+---
+
+#### **`model_corpus_comparison.py`**
+Compara diferentes combinaciones de modelos y corpus.
+
+---
+
+#### **`tass_sklearn_demo.py`**
+Demo específico del corpus TASS con sklearn.
+
+---
+
+### Entrenamiento (training/)
+
+#### **`train_sentiment_sklearn.py`**
+Entrena un clasificador de sentimiento en TASS.
+
+**Ejecutar:**
+```bash
+python examples/training/train_sentiment_sklearn.py
+```
+
+**Qué hace:**
+- Descarga TASS automáticamente
+- Entrena modelo sklearn
+- Evalúa en test set
+- Guarda modelo entrenado
+
+---
+
+#### **`train_sklearn_model.py`**
+Script genérico para entrenar modelos sklearn.
+
+---
+
+### Templates (templates/)
+
+#### **`data_loader_template.py`**
+Template para cargar datos desde diferentes fuentes.
+
+**Soporta:**
+- SQLite
+- CSV
+- JSON
+- APIs
+- Archivos de texto
+
+**Cómo usarlo:**
+1. Copiar el template
+2. Adaptar la función de carga a tu fuente de datos
+3. Conectar con el pipeline
+
+---
+
+## Guía de Uso Detallada
+
+### Escenario 1: Extraer Eventos de una Noticia Simple
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+from datetime import datetime
+
+# 1. Crear pipeline
+pipeline = EventExtractionPipeline()
+
+# 2. Preparar noticia
+text = """
+El festival internacional de cine tendrá lugar del 15 al 20 de marzo 
+en el Teatro Nacional. Se proyectarán más de 100 películas de 
+diferentes países.
+"""
+
+news = NewsContent(
+    id="noticia_cine",
+    text=text,
+    date=datetime(2026, 1, 6),  # Fecha de publicación
+    source="Diario Cultural"
+)
+
+# 3. Extraer eventos
+events = pipeline.extract_events(news)
+
+# 4. Procesar resultados
+print(f"Se encontraron {len(events)} eventos:\n")
+
+for i, event in enumerate(events, 1):
+    print(f"Evento {i}:")
+    print(f"  Fecha: {event.date.strftime('%d/%m/%Y')}")
+    print(f"  Tipo: {event.event_type.value}")
+    print(f"  Sentimiento: {event.sentiment.value}")
+    print(f"  Confianza tipo: {event.confidence:.0%}")
+    print(f"  Confianza sentimiento: {event.sentiment_confidence:.0%}")
+    
+    if event.entidades_asociadas:
+        print("  Entidades:")
+        for ent in event.entidades_asociadas:
+            print(f"    - {ent['text']} [{ent['role']}]")
+    print()
+```
+
+**Salida esperada:**
+```
+Se encontraron 2 eventos:
+
+Evento 1:
+  Fecha: 15/03/2026
+  Tipo: cultural
+  Sentimiento: positivo
+  Confianza tipo: 95%
+  Confianza sentimiento: 85%
+  Entidades:
+    - festival internacional de cine [subject]
+    - Teatro Nacional [named_entity/LOC]
+
+Evento 2:
+  Fecha: 20/03/2026
+  Tipo: cultural
+  Sentimiento: positivo
+  Confianza tipo: 95%
+  Confianza sentimiento: 85%
+  Entidades:
+    - festival internacional de cine [subject]
+    - Teatro Nacional [named_entity/LOC]
+```
+
+---
+
+### Escenario 2: Procesar Múltiples Noticias en Batch
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+from datetime import datetime
+
+pipeline = EventExtractionPipeline()
+
+# Lista de noticias
+noticias = [
+    {
+        "id": "n1",
+        "texto": "El partido de fútbol será mañana a las 8pm en el estadio.",
+        "fecha": datetime(2026, 1, 6)
+    },
+    {
+        "id": "n2",
+        "texto": "Se canceló el concierto por mal tiempo.",
+        "fecha": datetime(2026, 1, 5)
+    },
+    {
+        "id": "n3",
+        "texto": "El presidente anunciará nuevas medidas económicas.",
+        "fecha": datetime(2026, 1, 4)
+    }
+]
+
+# Procesar todas
+todos_eventos = []
+for noticia in noticias:
+    news = NewsContent(
+        id=noticia["id"],
+        text=noticia["texto"],
+        date=noticia["fecha"]
+    )
+    
+    events = pipeline.extract_events(news)
+    todos_eventos.extend(events)
+    
+    print(f"Noticia {noticia['id']}: {len(events)} eventos")
+
+# Estadísticas generales
+print(f"\nTotal de eventos extraídos: {len(todos_eventos)}")
+
+# Contar por tipo
+from collections import Counter
+tipos = Counter(e.event_type.value for e in todos_eventos)
+print("\nDistribución por tipo:")
+for tipo, count in tipos.most_common():
+    print(f"  {tipo}: {count}")
+
+# Contar por sentimiento
+sentimientos = Counter(e.sentiment.value for e in todos_eventos)
+print("\nDistribución por sentimiento:")
+for sent, count in sentimientos.most_common():
+    print(f"  {sent}: {count}")
+```
+
+---
+
+### Escenario 3: Usar Clasificadores ML Personalizados
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+from Event_extractor.classifiers.news_type import SklearnNewsTypeClassifier
+
+# 1. Entrenar clasificador de sentimiento
+sentiment_clf = SklearnSentimentClassifier(algorithm="LinearSVC")
+sentiment_clf.train_on_tass()  # Entrena con TASS-2019
+sentiment_clf.save("models/mi_sentimiento.pkl")
+
+# 2. Cargar clasificador de tipo (previamente entrenado)
+type_clf = SklearnNewsTypeClassifier(model_path="models/sklearn_news_classifier_simple.pkl")
+
+# 3. Crear pipeline con clasificadores personalizados
+pipeline = EventExtractionPipeline(
+    type_classifier=type_clf,
+    sentiment_classifier=sentiment_clf
+)
+
+# 4. Usar normalmente
+news = NewsContent(
+    id="n1",
+    text="Grave accidente en la autopista causa demoras."
+)
+
+events = pipeline.extract_events(news)
+
+for event in events:
+    print(f"Tipo: {event.event_type.value} ({event.confidence:.0%})")
+    print(f"Sentimiento: {event.sentiment.value} ({event.sentiment_confidence:.0%})")
+```
+
+---
+
+### Escenario 4: Cargar desde Base de Datos
+
+```python
+import sqlite3
+from Event_extractor import EventExtractionPipeline, NewsContent
+from datetime import datetime
+
+# 1. Conectar a base de datos
+conn = sqlite3.connect("noticias.db")
+cursor = conn.cursor()
+
+# 2. Cargar noticias
+cursor.execute("SELECT id, fecha, texto FROM noticias LIMIT 10")
+rows = cursor.fetchall()
+
+# 3. Crear pipeline
+pipeline = EventExtractionPipeline()
+
+# 4. Procesar cada noticia
+eventos_totales = []
+
+for row in rows:
+    news_id, fecha_str, texto = row
+    
+    # Parsear fecha
+    try:
+        fecha = datetime.strptime(fecha_str, "%Y-%m-%d %H:%M:%S")
+    except:
+        fecha = datetime.now()
+    
+    # Crear NewsContent
+    news = NewsContent(
+        id=str(news_id),
+        text=texto,
+        date=fecha
+    )
+    
+    # Extraer eventos
+    events = pipeline.extract_events(news)
+    eventos_totales.extend(events)
+    
+    print(f"Noticia {news_id}: {len(events)} eventos")
+
+conn.close()
+
+print(f"\nTotal: {len(eventos_totales)} eventos de {len(rows)} noticias")
+```
+
+---
+
+### Escenario 5: Exportar Eventos a JSON/CSV
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+import json
+import csv
+from datetime import datetime
+
+pipeline = EventExtractionPipeline()
+
+# Extraer eventos
+news = NewsContent(
+    id="n1",
+    text="El festival será del 10 al 15 de enero en el parque central."
+)
+events = pipeline.extract_events(news)
+
+# === Exportar a JSON ===
+eventos_json = []
+for event in events:
+    evento_dict = {
+        "fecha": event.date.isoformat(),
+        "tipo": event.event_type.value,
+        "sentimiento": event.sentiment.value,
+        "confianza_tipo": event.confidence,
+        "confianza_sentimiento": event.sentiment_confidence,
+        "noticia_id": event.source_news_id,
+        "entidades": event.entidades_asociadas
+    }
+    eventos_json.append(evento_dict)
+
+with open("eventos.json", "w", encoding="utf-8") as f:
+    json.dump(eventos_json, f, indent=2, ensure_ascii=False)
+
+print("Exportado a eventos.json")
+
+# === Exportar a CSV ===
+with open("eventos.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    
+    # Header
+    writer.writerow([
+        "fecha", "tipo", "sentimiento", 
+        "confianza_tipo", "confianza_sentimiento", 
+        "noticia_id"
+    ])
+    
+    # Datos
+    for event in events:
+        writer.writerow([
+            event.date.strftime("%Y-%m-%d"),
+            event.event_type.value,
+            event.sentiment.value,
+            f"{event.confidence:.2f}",
+            f"{event.sentiment_confidence:.2f}",
+            event.source_news_id
+        ])
+
+print("Exportado a eventos.csv")
+```
+
+---
+
+## Ejemplos Prácticos
+
+### Caso de Uso Real: Monitor de Eventos Deportivos
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent, EventType
+from datetime import datetime, timedelta
+
+pipeline = EventExtractionPipeline()
+
+# Noticias deportivas
+noticias_deportivas = [
+    "El partido de fútbol entre Real Madrid y Barcelona será el próximo domingo.",
+    "Se suspendió el torneo de tenis por lluvia.",
+    "El maratonista ganó la medalla de oro en los juegos olímpicos.",
+    "Habrá un campeonato de baloncesto la próxima semana."
+]
+
+eventos_deportivos = []
+
+for i, texto in enumerate(noticias_deportivas):
+    news = NewsContent(
+        id=f"deporte_{i}",
+        text=texto,
+        date=datetime.now()
+    )
+    
+    events = pipeline.extract_events(news)
+    
+    # Filtrar solo eventos deportivos
+    for event in events:
+        if event.event_type == EventType.DEPORTIVO:
+            eventos_deportivos.append(event)
+
+# Ordenar por fecha
+eventos_deportivos.sort(key=lambda e: e.date)
+
+# Mostrar calendario deportivo
+print("=== CALENDARIO DEPORTIVO ===\n")
+for event in eventos_deportivos:
+    print(f"📅 {event.date.strftime('%d/%m/%Y')}")
+    print(f"🏃 Evento deportivo")
+    print(f"😊 Sentimiento: {event.sentiment.value}")
+    print()
+```
+
+---
+
+### Caso de Uso Real: Análisis de Sentimiento de Noticias
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent, EventSentiment
+from collections import Counter
+
+pipeline = EventExtractionPipeline()
+
+noticias = [
+    "Gran éxito en la inauguración del nuevo hospital.",
+    "Terrible accidente deja varios heridos.",
+    "Se reunió el comité para discutir nuevas propuestas.",
+    "Cancelación masiva de vuelos causa caos en el aeropuerto.",
+    "Histórica victoria del equipo nacional."
+]
+
+eventos = []
+for i, texto in enumerate(noticias):
+    news = NewsContent(id=f"n{i}", text=texto)
+    eventos.extend(pipeline.extract_events(news))
+
+# Análisis de sentimiento
+sentimientos = Counter(e.sentiment for e in eventos)
+
+print("=== ANÁLISIS DE SENTIMIENTO ===\n")
+print(f"✅ Positivos: {sentimientos[EventSentiment.POSITIVO]}")
+print(f"❌ Negativos: {sentimientos[EventSentiment.NEGATIVO]}")
+print(f"⚪ Neutrales: {sentimientos[EventSentiment.NEUTRAL]}")
+
+# Porcentajes
+total = len(eventos)
+print(f"\nPorcentajes:")
+print(f"✅ Positivos: {sentimientos[EventSentiment.POSITIVO]/total*100:.1f}%")
+print(f"❌ Negativos: {sentimientos[EventSentiment.NEGATIVO]/total*100:.1f}%")
+print(f"⚪ Neutrales: {sentimientos[EventSentiment.NEUTRAL]/total*100:.1f}%")
+```
+
+---
+
+## Configuración Avanzada
+
+### Cambiar Modelo de spaCy
+
+```python
+# Usar modelo pequeño (más rápido, menos preciso)
+pipeline = EventExtractionPipeline(spacy_model="es_core_news_sm")
+
+# Usar modelo grande (más lento, más preciso)
+pipeline = EventExtractionPipeline(spacy_model="es_core_news_lg")
+```
+
+### Configurar Umbrales de Confianza
+
+```python
+from Event_extractor import EventExtractionPipeline, NewsContent
+
+pipeline = EventExtractionPipeline()
+news = NewsContent(id="n1", text="El evento será mañana.")
+events = pipeline.extract_events(news)
+
+# Filtrar por confianza mínima
+eventos_confiables = [
+    e for e in events 
+    if e.confidence >= 0.7 and e.sentiment_confidence >= 0.7
+]
+
+print(f"Eventos con confianza >= 70%: {len(eventos_confiables)}")
+```
+
+### Usar Clasificadores Personalizados
+
+```python
+from Event_extractor.classifiers.sentiment import SentimentClassifier, EventSentiment
+
+class MiClasificadorPersonalizado(SentimentClassifier):
+    """Clasificador personalizado de sentimiento"""
+    
+    def classify(self, text: str):
+        # Tu lógica personalizada aquí
+        if "excelente" in text.lower():
+            return EventSentiment.POSITIVO, 0.95
+        elif "terrible" in text.lower():
+            return EventSentiment.NEGATIVO, 0.95
+        else:
+            return EventSentiment.NEUTRAL, 0.5
+    
+    def classify_batch(self, texts):
+        return [self.classify(t) for t in texts]
+
+# Usar en el pipeline
+mi_clasificador = MiClasificadorPersonalizado()
+pipeline = EventExtractionPipeline(sentiment_classifier=mi_clasificador)
+```
+
+---
+
+## Troubleshooting
+
+### Error: No se encuentra el modelo de spaCy
+
+```bash
+# Solución: Descargar el modelo
+python -m spacy download es_core_news_lg
+```
+
+### Error: Import Error con transformers
+
+```bash
+# Solución: Instalar transformers
+pip install transformers torch
+```
+
+### Error: TASS corpus no se descarga
+
+```python
+# El script usa datos sintéticos como fallback
+# Si necesitas TASS, verifica tu conexión a internet
+# O descarga manualmente y carga con load_custom_corpus()
+```
+
+### Los eventos no se extraen correctamente
+
+**Posibles causas:**
+1. Fecha de referencia incorrecta
+2. Texto muy corto o sin fechas
+3. Modelo de spaCy no cargado
+
+**Solución:**
+```python
+# Asegúrate de proporcionar fecha de referencia
+news = NewsContent(
+    id="n1",
+    text=texto,
+    date=datetime(2026, 1, 6)  # ← IMPORTANTE
+)
+
+# Verifica que el texto tenga sentido
+print(f"Longitud del texto: {len(texto)} caracteres")
+
+# Prueba con un ejemplo simple primero
+texto_prueba = "El concierto será mañana a las 8pm."
+```
+
+---
+
+## Preguntas Frecuentes
+
+### ¿Cómo sé qué clasificador usar?
+
+- **Keyword**: Rápido, para prototipos, casos simples
+- **Sklearn**: Buen balance precisión/velocidad, necesita entrenamiento
+- **HuggingFace**: Máxima precisión, más lento, para producción
+
+### ¿Puedo usar el sistema en otro idioma?
+
+Actualmente está optimizado para español. Para otros idiomas:
+1. Cambia el modelo de spaCy
+2. Re-entrena los clasificadores
+3. Adapta las palabras clave
+
+### ¿Cómo mejoro la precisión?
+
+1. Usa clasificadores ML en lugar de keywords
+2. Entrena con datos específicos de tu dominio
+3. Ajusta los umbrales de confianza
+4. Usa el modelo de spaCy más grande
+
+### ¿Qué hacer si hay fechas incorrectas?
+
+**Siempre proporciona `date` en NewsContent:**
+```python
+news = NewsContent(
+    text=texto,
+    date=fecha_publicacion  # ← Esto es la fecha de referencia
+)
+```
+
+### ¿Cómo exporto los eventos?
+
+Ver [Escenario 5: Exportar Eventos](#escenario-5-exportar-eventos-a-jsoncsv)
+
+---
+
+## Recursos Adicionales
+
+- **README.md**: Documentación general
+- **QUICKSTART.md**: Guía de inicio rápido
+- **ARCHITECTURE.md**: Arquitectura del sistema
+- **examples/README.md**: Guía detallada de ejemplos
+- **Código fuente**: Todos los archivos tienen docstrings detallados
+
+---
+
+## Resumen Final
+
+### Para Empezar (3 pasos)
+
+```python
+# 1. Importar
+from Event_extractor import EventExtractionPipeline, NewsContent
+
+# 2. Crear pipeline
+pipeline = EventExtractionPipeline()
+
+# 3. Extraer eventos
+news = NewsContent(id="n1", text="Tu noticia aquí")
+events = pipeline.extract_events(news)
+```
+
+### Archivos Más Importantes
+
+1. **`Event_extractor/pipeline/event_pipeline.py`** - Pipeline principal
+2. **`Event_extractor/models/event.py`** - Modelo Event
+3. **`Event_extractor/models/news.py`** - Modelo NewsContent
+4. **`Event_extractor/extractors/date_extractor.py`** - Extracción de fechas
+5. **`examples/01_basic_usage.py`** - Ejemplo básico
+
+### Flujo Típico
+
+```
+Texto de noticia
+    ↓
+NewsContent (con fecha de referencia)
+    ↓
+EventExtractionPipeline
+    ↓
+    ├── Extracción de fechas
+    ├── Clasificación de tipo
+    ├── Clasificación de sentimiento
+    └── Extracción de entidades (NER + SVO)
+    ↓
+Lista de Event (eventos estructurados)
+```
+
+---
+
+**¿Necesitas más ayuda?**
+
+- Revisa los ejemplos en `examples/`
+- Ejecuta `python examples/05_test_manual_news.py` para probar interactivamente
+- Lee los docstrings en el código fuente
+- Consulta ARCHITECTURE.md para detalles técnicos
+
+**¡Listo para extraer eventos de noticias! 🚀**

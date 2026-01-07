@@ -1,6 +1,7 @@
 """
 Extractor de entidades nombradas (NER) para eventos.
 """
+from utils.text_preprocessor import get_nlp
 
 class NERExtractor:
     def __init__(self, model_path: str):
@@ -10,6 +11,8 @@ class NERExtractor:
         :param model_path: Ruta al modelo NER preentrenado.
         """
         self.model_path = model_path
+        self.nlp = get_nlp()
+        
         # Aquí se cargaría el modelo NER desde la ruta proporcionada
         # self.model = load_model(model_path)
 
