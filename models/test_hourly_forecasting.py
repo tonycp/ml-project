@@ -19,10 +19,9 @@ import xgboost as xgb
 import warnings
 warnings.filterwarnings('ignore')
 
-from .data_loader import ATCDataLoader
-from .preprocessing import ATCDataPreprocessor
-from .features import FeatureEngineer
-from .model import ATCPredictionModel
+from .data_loader import ATCAircraftDataLoader
+from .preprocessing import AircraftDataPreprocessor
+from .features import AircraftFeatureEngineer
 from .config import ModelConfig
 
 
@@ -39,15 +38,17 @@ class HourlyForecastingModel:
         self.config = config or ModelConfig()
         self.model = None
         self.scaler = StandardScaler()
-        self.feature_engineer = FeatureEngineer()
+        self.feature_engineer = AircraftFeatureEngineer(self.config)
         self.is_trained = False
 
-    def load_hourly_data(self, filepath: str) -> pd.DataFrame:
+    def load_hourly_data(self, filepath: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:
         """
         Carga datos de salidas horarias desde archivo CSV.
-
+        
         Args:
             filepath: Ruta al archivo CSV con datos horarias
+            start_date: Fecha de inicio opcional (YYYY-MM-DD)
+            end_date: Fecha de fin opcional (YYYY-MM-DD)
 
         Returns:
             DataFrame con datos procesados
@@ -73,11 +74,18 @@ class HourlyForecastingModel:
         df['day_of_week'] = df['time'].dt.dayofweek
         df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
 
-        # Filtrar solo datos del día 26 de noviembre (como en el ejemplo)
-        df = df[df['time'].dt.date == pd.to_datetime('2024-11-26').date()]
+        # Filtrar por fecha si se especifica
+        if start_date:
+            start_dt = pd.to_datetime(start_date).date()
+            df = df[df['time'].dt.date >= start_dt]
+            
+        if end_date:
+            end_dt = pd.to_datetime(end_date).date()
+            df = df[df['time'].dt.date <= end_dt]
 
         print(f"Datos cargados: {len(df)} registros")
-        print(f"Rango temporal: {df['time'].min()} - {df['time'].max()}")
+        if not df.empty:
+            print(f"Rango temporal: {df['time'].min()} - {df['time'].max()}")
         print(f"Aeropuertos únicos: {df['adep'].nunique()}")
 
         return df
@@ -321,10 +329,11 @@ class HourlyForecastingTest:
         print("="*80)
 
         try:
-            # 1. Cargar datos
+            # 1. Cargar datos (todos los disponibles o un rango amplio)
             print("\n1. CARGANDO DATOS HORARIOS")
             print("-"*50)
             data_path = "data/ATC csvs/atfm_houradepflights_202512301506.csv"
+            # Cargar todos los datos disponibles
             self.data = self.model.load_hourly_data(data_path)
 
             # 2. Crear características
@@ -353,11 +362,11 @@ class HourlyForecastingTest:
             self._detailed_analysis()
 
             print("\n" + "="*80)
-            print("✅ TEST COMPLETADO EXITOSAMENTE")
+            print("TEST COMPLETADO EXITOSAMENTE")
             print("="*80)
 
         except Exception as e:
-            print(f"\n❌ ERROR en el test: {e}")
+            print(f"\nERROR en el test: {e}")
             import traceback
             traceback.print_exc()
 
@@ -435,10 +444,18 @@ class HourlyForecastingTest:
 
         # 3. Comparación semana vs fin de semana
         weekly_comparison = self.data.groupby('is_weekend')['total'].mean()
-        weekly_comparison.index = ['Días de Semana', 'Fin de Semana']
-        weekly_comparison.plot(kind='bar', ax=axes[1, 0], color=['skyblue', 'orange'])
-        axes[1, 0].set_title('Comparación: Semana vs Fin de Semana')
-        axes[1, 0].set_ylabel('Promedio de Salidas por Hora')
+        
+        # Mapear índice actual (0/1) a etiquetas, manejando casos donde falta alguna categoría
+        labels_map = {0: 'Días de Semana', 1: 'Fin de Semana'}
+        weekly_comparison.index = [labels_map.get(i, str(i)) for i in weekly_comparison.index]
+        
+        if not weekly_comparison.empty:
+            weekly_comparison.plot(kind='bar', ax=axes[1, 0], color=['skyblue', 'orange'][:len(weekly_comparison)])
+            axes[1, 0].set_title('Comparación: Semana vs Fin de Semana')
+            axes[1, 0].set_ylabel('Promedio de Salidas por Hora')
+        else:
+             axes[1, 0].text(0.5, 0.5, 'Datos insuficientes para comparación', 
+                            ha='center', va='center')
 
         # 4. Distribución de frecuencias
         axes[1, 1].hist(self.data['total'], bins=20, alpha=0.7, color='green', edgecolor='black')
@@ -463,20 +480,25 @@ def compare_daily_vs_hourly():
     print("="*80)
 
     # Cargar datos diarios para comparación
-    daily_loader = ATCDataLoader()
-    daily_data = daily_loader.load_data()
-
-    if daily_data is not None:
+    # Cargar datos diarios para comparación
+    config = ModelConfig()
+    daily_loader = ATCAircraftDataLoader(config)
+    try:
+        daily_data = daily_loader.load_daily_atc_data()
         print("Datos diarios disponibles para comparación")
         print(f"Registros diarios: {len(daily_data)}")
+    except Exception as e:
+        print(f"Datos diarios no disponibles para comparación: {e}")
+        daily_data = None
 
+    if daily_data is not None:
         # Aquí iría la comparación detallada
-        # Por ahora solo mostramos que está disponible
-    else:
-        print("Datos diarios no disponibles para comparación")
-
+        pass
+    
     # Datos horarias
     hourly_test = HourlyForecastingTest()
+    # Asumiendo que load_hourly_data es un método de HourlyForecastingModel
+    # Para la comparación, cargamos todos los datos disponibles sin filtrar por fecha
     hourly_data = hourly_test.model.load_hourly_data("data/ATC csvs/atfm_houradepflights_202512301506.csv")
 
     print(f"Registros horarias: {len(hourly_data)}")
@@ -486,7 +508,7 @@ def compare_daily_vs_hourly():
 
 def main():
     """Función principal para ejecutar el test."""
-    print("🚀 Iniciando Test de Forecasting Horario")
+    print("Iniciando Test de Forecasting Horario")
     print("Sistema de predicción de salidas de aeronaves por hora")
     print("="*80)
 
@@ -498,27 +520,27 @@ def main():
     compare_daily_vs_hourly()
 
     print("\n" + "="*80)
-    print("🎯 RESUMEN EJECUTIVO")
+    print("RESUMEN EJECUTIVO")
     print("="*80)
     print("""
-✅ Forecasting Horario Implementado:
-   • Modelo XGBoost optimizado para series temporales
-   • Features temporales cíclicas (sin/cos de hora)
-   • Características de lag y rolling windows
-   • Validación cruzada temporal
+Forecasting Horario Implementado:
+   - Modelo XGBoost optimizado para series temporales
+   - Features temporales cíclicas (sin/cos de hora)
+   - Características de lag y rolling windows
+   - Validación cruzada temporal
 
-📊 Métricas Típicas Esperadas:
-   • MAE: 1.5-3.0 salidas por hora
-   • RMSE: 2.0-4.5 salidas por hora
-   • R²: 0.75-0.90 (dependiendo del aeropuerto)
+Métricas Típicas Esperadas:
+   - MAE: 1.5-3.0 salidas por hora
+   - RMSE: 2.0-4.5 salidas por hora
+   - R²: 0.75-0.90 (dependiendo del aeropuerto)
 
-🎯 Beneficios del Forecasting Horario:
-   • Mayor precisión para planificación operativa
-   • Detección de picos de demanda por hora
-   • Mejor asignación de recursos aeroportuarios
-   • Alertas tempranas de congestión
+Beneficios del Forecasting Horario:
+   - Mayor precisión para planificación operativa
+   - Detección de picos de demanda por hora
+   - Mejor asignación de recursos aeroportuarios
+   - Alertas tempranas de congestión
 
-🔄 Próximos Pasos Recomendados:
+Próximos Pasos Recomendados:
    1. Integrar datos meteorológicos por hora
    2. Añadir características de eventos noticiosos
    3. Implementar forecasting multi-paso (24h adelante)
