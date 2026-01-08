@@ -555,6 +555,86 @@ class LSTMModel(BaseForecaster):
         return self
 
 
+
+class XGBoostModel(BaseForecaster):
+    """Modelo XGBoost para forecasting de series temporales."""
+
+    def __init__(self, config: ModelConfig):
+        super().__init__(config, 'xgboost')
+        self.xgb_config = config.models.get('xgboost', {
+            'n_estimators': 100,
+            'max_depth': 6,
+            'learning_rate': 0.1,
+            'random_state': 42,
+            'n_jobs': -1
+        })
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> 'XGBoostModel':
+        """Entrena modelo XGBoost."""
+        try:
+            import xgboost as xgb
+
+            self.logger.info(f"Entrenando XGBoost con {self.xgb_config['n_estimators']} estimadores")
+
+            self.model = xgb.XGBRegressor(**self.xgb_config)
+            self.model.fit(X, y)
+
+            self.is_trained = True
+            self.logger.info("XGBoost entrenado exitosamente")
+
+            # Calcular importancia de features
+            self.feature_importance = dict(zip(X.columns, self.model.feature_importances_))
+
+        except ImportError:
+            raise ImportError("xgboost no está instalado. Instale con: pip install xgboost")
+        except Exception as e:
+            self.logger.error(f"Error entrenando XGBoost: {e}")
+            raise
+
+        return self
+
+    def predict(self, X: pd.DataFrame, forecast_horizon: int = 1) -> np.ndarray:
+        """Realiza predicciones con XGBoost."""
+        if not self.is_trained:
+            raise ValueError("Modelo no entrenado")
+
+        try:
+            predictions = self.model.predict(X)
+            return predictions
+
+        except Exception as e:
+            self.logger.error(f"Error en predicción XGBoost: {e}")
+            raise
+
+    def save(self, filepath: Path) -> None:
+        """Guarda modelo XGBoost."""
+        model_data = {
+            'model': self.model,
+            'feature_importance': self.feature_importance,
+            'config': self.xgb_config,
+            'model_config': self.config.__dict__
+        }
+
+        with open(filepath, 'wb') as f:
+            pickle.dump(model_data, f)
+
+        self.logger.info(f"Modelo XGBoost guardado en {filepath}")
+
+    def load(self, filepath: Path) -> 'XGBoostModel':
+        """Carga modelo XGBoost."""
+        with open(filepath, 'rb') as f:
+            model_data = pickle.load(f)
+
+        self.model = model_data['model']
+        self.feature_importance = model_data.get('feature_importance', {})
+        self.xgb_config = model_data['config']
+        self.is_trained = True
+
+        self.logger.info(f"Modelo XGBoost cargado desde {filepath}")
+
+        return self
+
+
 class EnsembleModel(BaseForecaster):
     """Modelo ensemble que combina múltiples forecasters."""
 
