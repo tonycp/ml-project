@@ -27,7 +27,8 @@ from models import (
     RandomForestModel,
     LSTMModel,
     EnsembleModel,
-    NewsDataLoader
+    NewsDataLoader,
+    WeatherDataLoader
 )
 
 
@@ -118,6 +119,14 @@ def main():
         news_loader = NewsDataLoader(config)
         news = news_loader.load_news_events(feature_type='aggregated')
         df = pd.merge(df, news, left_index=True, right_index=True, how='left')
+
+        weather_loader = WeatherDataLoader(config)
+        weather = weather_loader.load_weather_data(
+            start_date=df.index.min().strftime('%Y-%m-%d'),
+            end_date=df.index.max().strftime('%Y-%m-%d')
+        )
+        df = pd.merge(df, weather, left_index=True, right_index=True, how='left')
+
 
         logger.info(f"Datos cargados: {len(df)} registros del {df.index.min()} al {df.index.max()}")
 
