@@ -26,7 +26,8 @@ from models import (
     ProphetModel,
     RandomForestModel,
     LSTMModel,
-    EnsembleModel
+    EnsembleModel,
+    NewsDataLoader
 )
 
 
@@ -107,12 +108,16 @@ def main():
 
         # Cargar datos
         logger.info("Cargando datos...")
-        data_loader = ATCAircraftDataLoader(config)
-    
-        atc = data_loader.load_daily_atc_data()
-        acids = data_loader.load_daily_acids_data(use_one_hot=True)
 
-        df = pd.merge(atc, acids, left_index=True, right_index=True, how='left')
+        data_loader = ATCAircraftDataLoader(config)
+        df = data_loader.load_daily_atc_data()
+        
+        acids = data_loader.load_daily_acids_data(use_one_hot=True)
+        df = pd.merge(df, acids, left_index=True, right_index=True, how='left')
+
+        news_loader = NewsDataLoader(config)
+        news = news_loader.load_news_events(feature_type='aggregated')
+        df = pd.merge(df, news, left_index=True, right_index=True, how='left')
 
         logger.info(f"Datos cargados: {len(df)} registros del {df.index.min()} al {df.index.max()}")
 

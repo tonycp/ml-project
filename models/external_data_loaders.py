@@ -193,7 +193,7 @@ class WeatherDataLoader:
 
 class NewsDataLoader:
     """
-    Cargador de datos de noticias usando el sistema Event_extractor.
+    Cargador de datos de noticias desde eventos.json.
 
     Los eventos noticiosos pueden afectar el tráfico aéreo:
     - Accidentes/Incidentes: Cierran espacios aéreos temporalmente
@@ -206,109 +206,192 @@ class NewsDataLoader:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        # Configuración de datos de noticias
-        self.news_config = config.external_data.get('news', {
-            'data_dir': Path('data/news'),
-            'sources': ['granma', 'juventud_rebelde', 'cuba_debate'],
-            'event_types': ['ACCIDENTE', 'METEOROLOGICO', 'POLITICO', 'SOCIAL', 'INCIDENTE']
-        })
+        # Ruta al archivo de eventos
+        self.events_file = self.config.data_dir / self.config.news_file
 
     def load_news_events(self, start_date: Optional[str] = None,
-                        end_date: Optional[str] = None) -> pd.DataFrame:
+                        end_date: Optional[str] = None,
+                        feature_type: str = 'aggregated') -> pd.DataFrame:
         """
-        Carga eventos de noticias que pueden afectar el tráfico aéreo.
+        Carga eventos de noticias desde eventos.json y genera features.
 
         Args:
             start_date: Fecha de inicio
             end_date: Fecha de fin
+            feature_type: 'aggregated' (Opción A) o 'one_hot' (Opción B)
 
         Returns:
-            DataFrame con eventos noticiosos por fecha
+            DataFrame con features de noticias por fecha
         """
-        self.logger.info("Cargando datos de eventos noticiosos...")
+        self.logger.info(f"Cargando datos de eventos desde: {self.events_file}")
+
+        if not self.events_file.exists():
+            self.logger.warning(f"Archivo de eventos no encontrado: {self.events_file}")
+            return pd.DataFrame()
 
         try:
-            # Importar el sistema Event_extractor
-            import sys
-            sys.path.append(str(Path(__file__).parent.parent))
+            # Cargar datos JSON
+            with open(self.events_file, 'r', encoding='utf-8') as f:
+                events_data = json.load(f)
 
-            from Event_extractor import EventExtractionPipeline, NewsContent, NewsMetadata
+            if not events_data:
+                self.logger.warning("Archivo de eventos vacío")
+                return pd.DataFrame()
 
-            # Crear pipeline de extracción
-            pipeline = EventExtractionPipeline()
+            # Convertir a DataFrame
+            df_events = pd.DataFrame(events_data)
+            
+            # Procesar fechas
+            df_events['fecha'] = pd.to_datetime(df_events['fecha'])
+            df_events = df_events.set_index('fecha').sort_index()
 
-        except ImportError:
-            self.logger.warning("Event_extractor no disponible, usando datos sintéticos")
-            return self._generate_synthetic_news_events(start_date, end_date)
+            # Filtrar por rango de fechas si se especifica
+            if start_date:
+                df_events = df_events[df_events.index >= start_date]
+            if end_date:
+                df_events = df_events[df_events.index <= end_date]
 
-        # En producción, aquí cargaríamos noticias reales desde archivos/APIs
-        # Por ahora, generar eventos sintéticos representativos
+            # Generar features según el tipo solicitado
+            if feature_type == 'aggregated':
+                return self._create_aggregated_features(df_events)
+            elif feature_type == 'one_hot':
+                return self._create_one_hot_features(df_events)
+            else:
+                raise ValueError(f"feature_type debe ser 'aggregated' o 'one_hot', no '{feature_type}'")
 
-        return self._generate_synthetic_news_events(start_date, end_date)
+        except Exception as e:
+            self.logger.error(f"Error cargando eventos: {e}")
+            return pd.DataFrame()
 
-    def _generate_synthetic_news_events(self, start_date: Optional[str] = None,
-                                       end_date: Optional[str] = None) -> pd.DataFrame:
+    def _create_aggregated_features(self, df_events: pd.DataFrame) -> pd.DataFrame:
         """
-        Genera eventos noticiosos sintéticos representativos de Cuba.
+        Crea features agregadas de noticias (Opción A).
+        
+        Genera features numéricas resumidas por fecha.
         """
-        if start_date and end_date:
-            date_range = pd.date_range(start=start_date, end=end_date, freq='D')
-        else:
-            date_range = pd.date_range(start='2022-01-01', end='2025-12-31', freq='D')
-
-        events_data = []
-
+        # Agrupar por fecha y contar eventos
+        daily_features = []
+        
+        # Obtener rango completo de fechas para asegurar continuidad
+        min_date = df_events.index.min()
+        max_date = df_events.index.max()
+        date_range = pd.date_range(start=min_date, end=max_date, freq='D')
+        
         for date in date_range:
-            # Eventos diarios (baja probabilidad)
-            daily_events = {
-                'accident_count': 0,
-                'storm_alert_count': 0,
-                'political_event_count': 0,
-                'social_event_count': 0,
-                'incident_count': 0,
-                'international_event_count': 0,
-                'has_major_event': 0,
-                'event_impact_score': 0.0
-            }
+            # Eventos del día
+            day_events = df_events[df_events.index.date == date.date()]
+            
+            if day_events.empty:
+                # Día sin eventos
+                daily_features.append({
+                    'fecha': date,
+                    'news_count_total': 0,
+                    'news_positive_count': 0,
+                    'news_negative_count': 0,
+                    'news_neutral_count': 0,
+                    'news_sentimiento_avg': 0.0,
+                    'news_confianza_avg': 0.0,
+                    'news_has_cultural': 0,
+                    'news_has_deportivo': 0,
+                    'news_has_meteorologico': 0,
+                    'news_has_politico': 0,
+                    'news_has_economico': 0,
+                    'news_has_social': 0,
+                    'news_has_incidente': 0,
+                    'news_has_regulacion': 0
+                })
+            else:
+                # Calcular features del día
+                total_count = len(day_events)
+                positive_count = (day_events['sentimiento'] == 'positive').sum()
+                negative_count = (day_events['sentimiento'] == 'negative').sum()
+                neutral_count = (day_events['sentimiento'] == 'neutral').sum()
+                
+                # Sentimiento promedio (positive=1, neutral=0, negative=-1)
+                sentimiento_map = {'positive': 1, 'neutral': 0, 'negative': -1}
+                sentimiento_avg = day_events['sentimiento'].map(sentimiento_map).mean()
+                
+                # Confianza promedio
+                confianza_avg = day_events['confianza_sentimiento'].mean()
+                
+                # Tipos de eventos (binarios)
+                tipos_presentes = set(day_events['tipo'].values)
+                
+                daily_features.append({
+                    'fecha': date,
+                    'news_count_total': total_count,
+                    'news_positive_count': positive_count,
+                    'news_negative_count': negative_count,
+                    'news_neutral_count': neutral_count,
+                    'news_sentimiento_avg': sentimiento_avg,
+                    'news_confianza_avg': confianza_avg,
+                    'news_has_cultural': 1 if 'CULTURAL' in tipos_presentes else 0,
+                    'news_has_deportivo': 1 if 'DEPORTIVO' in tipos_presentes else 0,
+                    'news_has_meteorologico': 1 if 'METEOROLOGICO' in tipos_presentes else 0,
+                    'news_has_politico': 1 if 'POLITICO' in tipos_presentes else 0,
+                    'news_has_economico': 1 if 'ECONOMICO' in tipos_presentes else 0,
+                    'news_has_social': 1 if 'SOCIAL' in tipos_presentes else 0,
+                    'news_has_incidente': 1 if 'INCIDENTE' in tipos_presentes else 0,
+                    'news_has_regulacion': 1 if 'REGULACION' in tipos_presentes else 0
+                })
+        
+        # Crear DataFrame
+        df_features = pd.DataFrame(daily_features)
+        df_features['fecha'] = pd.to_datetime(df_features['fecha'])
+        df_features = df_features.set_index('fecha').sort_index()
+        
+        self.logger.info(f"Features agregadas creadas: {len(df_features)} registros, {len(df_features.columns)} columnas")
+        return df_features
 
-            # Accidentes/Incidentes (muy raros)
-            if np.random.random() < 0.005:  # 0.5% de probabilidad
-                daily_events['accident_count'] = 1
-                daily_events['incident_count'] = 1
-                daily_events['has_major_event'] = 1
-                daily_events['event_impact_score'] = 0.8
-
-            # Alertas meteorológicas (más comunes en temporada de lluvias)
-            rain_season = 1 if 5 <= date.month <= 10 else 0
-            storm_prob = 0.02 * rain_season + 0.005  # 2% en temporada, 0.5% fuera
-            if np.random.random() < storm_prob:
-                daily_events['storm_alert_count'] = 1
-                daily_events['has_major_event'] = 1
-                daily_events['event_impact_score'] = 0.6
-
-            # Eventos políticos (elecciones, visitas importantes)
-            if np.random.random() < 0.01:  # 1% de probabilidad
-                daily_events['political_event_count'] = 1
-                daily_events['international_event_count'] = 1
-                daily_events['event_impact_score'] = 0.4
-
-            # Eventos sociales/masivos
-            if np.random.random() < 0.015:  # 1.5% de probabilidad
-                daily_events['social_event_count'] = 1
-                daily_events['event_impact_score'] = 0.3
-
-            events_data.append({
-                'date': date,
-                **daily_events
-            })
-
-        df = pd.DataFrame(events_data)
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.set_index('date').sort_index()
-
-        self.logger.info(f"Eventos noticiosos generados: {len(df)} registros")
-
-        return df
+    def _create_one_hot_features(self, df_events: pd.DataFrame) -> pd.DataFrame:
+        """
+        Crea conteo de noticias por tipo y sentimiento (Opción B).
+        
+        Genera columnas con el número de noticias de cada tipo y sentimiento.
+        """
+        # Obtener todos los tipos y sentimientos únicos
+        all_tipos = df_events['tipo'].unique()
+        all_sentimientos = df_events['sentimiento'].unique()
+        
+        # Obtener rango completo de fechas
+        min_date = df_events.index.min()
+        max_date = df_events.index.max()
+        date_range = pd.date_range(start=min_date, end=max_date, freq='D')
+        
+        daily_features = []
+        
+        for date in date_range:
+            # Eventos del día
+            day_events = df_events[df_events.index.date == date.date()]
+            
+            # Inicializar diccionario de features
+            row_features = {'fecha': date}
+            
+            # Conteo por tipo (no binario)
+            for tipo in all_tipos:
+                if not day_events.empty:
+                    count = (day_events['tipo'] == tipo).sum()
+                    row_features[f'news_tipo_{tipo}'] = count
+                else:
+                    row_features[f'news_tipo_{tipo}'] = 0
+            
+            # Conteo por sentimiento (no binario)
+            for sentimiento in all_sentimientos:
+                if not day_events.empty:
+                    count = (day_events['sentimiento'] == sentimiento).sum()
+                    row_features[f'news_sentimiento_{sentimiento}'] = count
+                else:
+                    row_features[f'news_sentimiento_{sentimiento}'] = 0
+            
+            daily_features.append(row_features)
+        
+        # Crear DataFrame
+        df_features = pd.DataFrame(daily_features)
+        df_features['fecha'] = pd.to_datetime(df_features['fecha'])
+        df_features = df_features.set_index('fecha').sort_index()
+        
+        self.logger.info(f"Conteo de noticias por tipo creado: {len(df_features)} registros, {len(df_features.columns)} columnas")
+        return df_features
 
     def get_news_features_for_date(self, target_date: pd.Timestamp) -> Dict[str, float]:
         """
@@ -401,6 +484,7 @@ class MultiModalDataLoader:
         # Fusionar datos de noticias
         if include_news:
             news_df = self.news_loader.load_news_events(
+
                 start_date=base_df.index.min().strftime('%Y-%m-%d'),
                 end_date=base_df.index.max().strftime('%Y-%m-%d')
             )

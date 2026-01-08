@@ -17,6 +17,7 @@ class ModelConfig:
     atc_daily_acids_file: str = "atc_daylyacids_202512301506.csv"
     atfm_hourly_file: str = "atfm_hourlyaoigroupflights_202512301506.csv"
     atfm_monthly_file: str = "atfm_monthrouteflights_202512301506.csv"
+    news_file: str = "eventos.json"
 
     # Configuración temporal
     date_column: str = "time"

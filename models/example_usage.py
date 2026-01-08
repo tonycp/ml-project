@@ -18,7 +18,8 @@ from models import (
     AircraftForecaster,
     ARIMAModel,
     ProphetModel,
-    RandomForestModel
+    RandomForestModel,
+    NewsDataLoader
 )
 
 
@@ -58,9 +59,6 @@ def main():
         # Opción 1: Features agregadas (recomendado para empezar)
         df_acids = data_loader.load_daily_acids_data(use_one_hot=True)
         
-        # Opción 2: One-hot encoding (más avanzado, descomentar para probar)
-        # df_acids = data_loader.load_daily_acids_data(use_one_hot=True)
-        
         if not df_acids.empty:
             print(f"✓ Datos ACIDs cargados: {len(df_acids)} registros")
             print(f"✓ Features ACIDs: {list(df_acids.columns)}")
@@ -75,6 +73,32 @@ def main():
             print(f"✓ Valores faltantes rellenados")
         else:
             print("⚠️ No se pudieron cargar datos ACIDs, continuando sin ellos")
+
+        # 2.2. Cargar y unir datos de noticias
+        print("\n📰 Paso 2.2: Cargar y unir datos de noticias")
+
+        news_loader = NewsDataLoader(config)
+        
+        # Opción A: Features agregadas (recomendado)
+        df_news = news_loader.load_news_events(feature_type='one_hot')
+        
+        # Opción B: One-hot encoding (descomentar para probar)
+        # df_news = news_loader.load_news_events(feature_type='one_hot')
+        
+        if not df_news.empty:
+            print(f"✓ Datos noticias cargados: {len(df_news)} registros")
+            print(f"✓ Features noticias: {list(df_news.columns)}")
+            
+            # Unir datasets por fecha
+            df = pd.merge(df, df_news, left_index=True, right_index=True, how='left')
+            print(f"✓ Datasets unidos con noticias: {len(df)} registros finales")
+            
+            # Rellenar valores faltantes para días sin noticias
+            news_cols = df_news.columns
+            df[news_cols] = df[news_cols].fillna(0)
+            print(f"✓ Valores faltantes de noticias rellenados")
+        else:
+            print("⚠️ No se pudieron cargar datos de noticias, continuando sin ellos")
 
         # 3. Preprocesamiento
         print("\n🔧 Paso 3: Preprocesamiento")
