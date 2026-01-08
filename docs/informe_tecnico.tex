@@ -1,0 +1,178 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish, es-tabla]{babel}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{float}
+
+\geometry{
+    left=3cm,
+    right=2.5cm,
+    top=3cm,
+    bottom=3cm
+}
+
+\title{\textbf{Predicción de la Cantidad de Aeronaves en el Espacio Aéreo Cubano} \\ \large Informe Técnico Final}
+\author{Equipo de Desarrollo}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    Este documento detalla el desarrollo de un sistema de predicción de tráfico aéreo para la FIR Habana. Se aborda la problemática de gestionar eficientemente el flujo de aeronaves mediante el uso de modelos de aprendizaje automático (XGBoost). El informe describe la metodología completa, desde la recolección y limpieza de datos (incluyendo la corrección crítica de conteo de vuelos únicos), hasta la ingeniería de características y la evaluación de resultados. Se discuten las implicaciones de los hallazgos y se proponen líneas de trabajo futuro.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introducción}
+    \subsection{Antecedentes y Contexto}
+        Breve historia del control de tráfico aéreo en la región y la necesidad de herramientas predictivas modernas.
+        
+    \subsection{Definición del Problema}
+        Descripción formal del problema de forecasting de series temporales en este dominio.
+        
+    \subsection{Objetivos}
+        \subsubsection{Objetivo General}
+        \subsubsection{Objetivos Específicos}
+            \begin{itemize}
+                \item Implementar pipeline de procesamiento de datos ATFM.
+                \item Desarrollar modelos de regresión robustos.
+                \item Validar resultados con métricas cuantitativas y cualitativas.
+            \end{itemize}
+            
+    \subsection{Alcance y Limitaciones}
+
+\section{Marco Teórico}
+El presente capítulo establece los fundamentos conceptuales necesarios para comprender el alcance y la metodología del estudio. Se describe el contexto de la gestión de tráfico aéreo, las particularidades de las series temporales en este dominio y se detallan los algoritmos seleccionados para el desarrollo de los modelos predictivos.
+
+\subsection{Gestión de Afluencia del Tráfico Aéreo (ATFM)}
+La Gestión de Afluencia del Tráfico Aéreo (ATFM) es un servicio establecido para asegurar un flujo de tránsito aéreo seguro, ordenado y expedito. Su objetivo principal es asegurar que la capacidad de control de tránsito aéreo (ATC) sea utilizada al máximo posible y que el volumen de tráfico no exceda las capacidades declaradas por la autoridad competente. En el contexto de este proyecto, la región de estudio es la Región de Información de Vuelo (FIR) de La Habana, un corredor estratégico para el tráfico norte-sur en las Américas.
+
+Un componente crítico en la medición del volumen de tráfico es el Identificador Único Global de Vuelo (GUFI). A diferencia de los conteos tradicionales por sector que pueden inflar las cifras debido a que un mismo vuelo atraviesa múltiples sectores, el uso del GUFI permite contabilizar aeronaves únicas en el sistema. Esta distinción es fundamental para obtener una estimación precisa de la carga de trabajo real y la demanda del espacio aéreo \cite{icao9971}.
+
+\subsection{Análisis de Series Temporales en Aviación}
+El tráfico aéreo se caracteriza por exhibir patrones temporales altamente definidos. Se observa una fuerte estacionalidad a múltiples niveles: ciclos diarios determinados por los horarios comerciales de las aerolíneas, ciclos semanales con variaciones entre días laborables y fines de semana, y ciclos anuales influenciados por temporadas turísticas y festividades. El problema de predicción se aborda analizando estas componentes (tendencia, estacionalidad y ruido) en la serie histórica para proyectar valores futuros en un horizonte definido \cite{boxjenkins}.
+
+\subsection{Algoritmos de Predicción Utilizados}
+En este estudio se han implementado y comparado diversos enfoques de modelado, abarcando desde estadísticas clásicas hasta aprendizaje profundo.
+
+\subsubsection{Modelos Estadísticos y Aditivos}
+Los modelos ARIMA (AutoRegressive Integrated Moving Average) y su variante estacional SARIMA constituyen la línea base clásica para la predicción de series temporales. Estos modelos asumen que los valores futuros son una función lineal de los valores pasados y los errores pasados \cite{hyndman2018}. Por otro lado, Prophet es un modelo aditivo desarrollado por Facebook, diseñado para manejar series temporales con fuertes efectos estacionales y días festivos. Descompone la serie en componentes de tendencia, estacionalidad y eventos, siendo particularmente robusto frente a valores atípicos y cambios en la tendencia \cite{taylor2018}.
+
+\subsubsection{Aprendizaje Automático Basado en Árboles}
+Los métodos de ensamble basados en árboles de decisión han demostrado un rendimiento superior en datos tabulares estructurados. Random Forest construye múltiples árboles de decisión durante el entrenamiento y genera la media de las predicciones de los árboles individuales, reduciendo la varianza y el riesgo de sobreajuste \cite{breiman2001}.
+
+XGBoost (Extreme Gradient Boosting), el modelo central de este estudio, es una implementación optimizada del algoritmo de Gradient Boosting. A diferencia de Random Forest que construye árboles independientes, XGBoost construye árboles de forma secuencial, donde cada nuevo árbol intenta corregir los errores de los anteriores. Utiliza una función objetivo regularizada que controla la complejidad del modelo, haciéndolo altamente eficiente y preciso para capturar patrones no lineales en grandes conjuntos de datos \cite{chen2016}.
+
+\subsubsection{Redes Neuronales Recurrentes}
+Las redes LSTM (Long Short-Term Memory) son una arquitectura de redes neuronales recurrentes diseñada para aprender dependencias a largo plazo. A través de mecanismos de compuertas (entrada, olvido y salida), las LSTM pueden retener información relevante sobre secuencias temporales extensas mitigando el problema del gradiente desvaneciente, lo que las hace idóneas para modelar dinámicas temporales complejas \cite{hochreiter1997}.
+
+\subsection{Métricas de Evaluación}
+Para cuantificar el desempeño de los modelos se utilizan las siguientes métricas estándar:
+
+El Error Absoluto Medio (MAE) mide la magnitud promedio de los errores en un conjunto de predicciones, sin considerar su dirección:
+\begin{equation}
+    MAE = \frac{1}{n}\sum_{i=1}^{n}|y_i - \hat{y}_i|
+\end{equation}
+
+La Raíz del Error Cuadrático Medio (RMSE) es una medida cuadrática que penaliza más severamente los errores grandes, siendo útil para detectar predicciones con desviaciones significativas:
+\begin{equation}
+    RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}
+\end{equation}
+
+El Coeficiente de Determinación ($R^2$) indica la proporción de la varianza en la variable dependiente que es predecible a partir de las variables independientes, proporcionando una medida de la bondad de ajuste del modelo:
+\begin{equation}
+    R^2 = 1 - \frac{\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}{\sum_{i=1}^{n}(y_i - \bar{y})^2}
+\end{equation}
+
+\section{Metodología Experimental}
+    \subsection{Adquisición y Procesamiento de Datos}
+        \subsubsection{Datos Meteorológicos}
+            Se utilizaron las herramientas \texttt{db-tool} y \texttt{etl-tool} para la extracción, limpieza y almacenamiento de variables climáticas históricas (viento, temperatura, visibilidad) que afectan la operaciones aéreas.
+            
+        \subsubsection{Noticias y Eventos}
+            Implementación del módulo \texttt{Event\_extractor} para el procesamiento de lenguaje natural (NLP) sobre fuentes de noticias, permitiendo identificar eventos disruptivos o de alta demanda turística.
+            
+        \subsubsection{Datos de Operaciones Aéreas}
+            Archivos horarios (ATFM), diarios (ATC) y mensuales, estructurados por sectores y rutas.
+
+    \subsection{Fusión e Integración de Datos}
+        Estrategias para la unificación de series temporales con diferentes frecuencias (horaria vs diaria) y la incorporación de features exógenas (clima y noticias) al dataset principal de tráfico aéreo.
+
+    \subsection{Preprocesamiento y Limpieza}
+        \subsubsection{Corrección de Agregación de Datos}
+            Detalle del problema de doble conteo por sectores y la solución implementada (conteo de GUFIs únicos).
+        \subsubsection{Manejo de Valores Faltantes y Outliers}
+        
+    \subsection{Ingeniería de Características}
+        \subsubsection{Variables Temporales y Cíclicas}
+        \subsubsection{Variables de Calendario (Festivos Cubanos)}
+        \subsubsection{Variables Exógenas (Impacto COVID-19)}
+        \subsubsection{Variables de Retardo (Lags) y Ventanas Móviles}
+        
+    \subsection{Estrategia de Validación}
+        División Entrenamiento/Prueba y métricas seleccionadas (MAE, RMSE, $R^2$, MAPE).
+
+\section{Desarrollo e Implementación}
+    \subsection{Arquitectura del Sistema}
+        Diagrama de flujo de datos: Ingesta (ETL/Extractor) -> Preprocessor -> Feature Engineer -> Model Registry.
+        
+    \subsection{Modelos Evaluados}
+        Se implementaron y compararon múltiples enfoques de forecasting definidos en \texttt{models/model.py}:
+        \begin{itemize}
+            \item \textbf{ARIMA/SARIMA:} Línea base estadística clásica.
+            \item \textbf{Prophet:} Modelo aditivo para series con fuerte estacionalidad.
+            \item \textbf{Random Forest:} Ensamble de árboles para capturar relaciones no lineales.
+            \item \textbf{XGBoost:} Boosting de gradiente optimizado para alto rendimiento.
+            \item \textbf{LSTM (Long Short-Term Memory):} Redes neuronales recurrentes para secuencias complejas.
+            \item \textbf{Ensemble:} Combinación ponderada de los mejores modelos individuales.
+        \end{itemize}
+
+    \subsection{Optimización de Hiperparámetros}
+        Descripción del proceso de \textit{hyperparameter tuning} (e.g., Grid Search, Random Search) realizado para maximizar las métricas de desempeño en cada modelo.
+        
+    \subsection{Configuración Final}
+        Parámetros óptimos seleccionados para el modelo desplegado.
+
+\section{Resultados}
+    \subsection{Desempeño Global del Modelo}
+        Tabla comparativa de métricas en el conjunto de prueba.
+        
+    \subsection{Análisis Temporal de Predicciones}
+        Gráficos de series temporales (Real vs Predicho) para el horizonte de prueba.
+        
+    \subsection{Importancia de Características}
+        Análisis de qué variables influyen más en la predicción.
+
+\section{Discusión}
+    \subsection{Interpretación de los Resultados}
+        ¿El modelo captura correctamente los picos y valles? ¿Cómo se comporta en días atípicos?
+        
+    \subsection{Análisis de Errores}
+        Identificación de momentos con mayor error y posibles causas (e.g., eventos no capturados por las features).
+        
+    \subsection{Impacto de la Calidad de los Datos}
+        Discusión sobre la reducción de volumen observada tras corregir la lógica de agregación y la persistencia de volúmenes altos en picos.
+        
+    \subsection{Implicaciones Operativas}
+        Utilidad práctica del modelo para los controladores y planificadores.
+
+\section{Conclusiones y Recomendaciones}
+    \subsection{Conclusiones}
+    \subsection{Trabajo Futuro}
+
+\bibliographystyle{ieeetr}
+\bibliography{referencias}
+
+\appendix
+\section{Anexos}
+    \subsection{Fragmentos de Código Relevantes}
+
+\end{document}
