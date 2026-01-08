@@ -108,7 +108,11 @@ def main():
         # Cargar datos
         logger.info("Cargando datos...")
         data_loader = ATCAircraftDataLoader(config)
-        df = data_loader.get_training_data(args.data_type)
+    
+        atc = data_loader.load_daily_atc_data()
+        acids = data_loader.load_daily_acids_data(use_one_hot=True)
+
+        df = pd.merge(atc, acids, left_index=True, right_index=True, how='left')
 
         logger.info(f"Datos cargados: {len(df)} registros del {df.index.min()} al {df.index.max()}")
 

@@ -5,6 +5,7 @@ Ejemplo de uso del sistema de forecasting de aeronaves.
 
 import sys
 from pathlib import Path
+import pandas as pd
 
 # Añadir el directorio padre al path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -50,6 +51,30 @@ def main():
         # Cargar datos de entrenamiento
         df = data_loader.get_training_data('daily_atc')
         print(f"✓ Datos de entrenamiento preparados: {len(df)} registros")
+
+        # 2.1. Cargar y unir datos de ACIDs
+        print("\n🔗 Paso 2.1: Cargar y unir datos de ACIDs")
+        
+        # Opción 1: Features agregadas (recomendado para empezar)
+        df_acids = data_loader.load_daily_acids_data(use_one_hot=True)
+        
+        # Opción 2: One-hot encoding (más avanzado, descomentar para probar)
+        # df_acids = data_loader.load_daily_acids_data(use_one_hot=True)
+        
+        if not df_acids.empty:
+            print(f"✓ Datos ACIDs cargados: {len(df_acids)} registros")
+            print(f"✓ Features ACIDs: {list(df_acids.columns)}")
+            
+            # Unir datasets por fecha
+            df = pd.merge(df, df_acids, left_index=True, right_index=True, how='left')
+            print(f"✓ Datasets unidos: {len(df)} registros finales")
+            
+            # Rellenar valores faltantes para días sin datos ACIDs
+            acids_cols = df_acids.columns
+            df[acids_cols] = df[acids_cols].fillna(0)
+            print(f"✓ Valores faltantes rellenados")
+        else:
+            print("⚠️ No se pudieron cargar datos ACIDs, continuando sin ellos")
 
         # 3. Preprocesamiento
         print("\n🔧 Paso 3: Preprocesamiento")

@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 import json
 import logging
+import ast
 from datetime import datetime, timedelta
 
+import re
 from .config import ModelConfig
 
 
@@ -19,6 +21,7 @@ class ATCAircraftDataLoader:
 
     Maneja la carga y procesamiento inicial de diferentes tipos de archivos:
     - Resúmenes diarios ATC (atc_dayatcopsummary)
+    - ACIDs diarios ATC (atc_daylyacids)
     - Vuelos horarios ATFM (atfm_hourlyaoigroupflights)
     - Vuelos mensuales por ruta (atfm_monthrouteflights)
     """
@@ -76,6 +79,154 @@ class ATCAircraftDataLoader:
 
         return df
 
+    def load_daily_acids_data(self, use_one_hot: bool = False) -> pd.DataFrame:
+        """
+        Carga y transforma los datos de `daily_acids` en features numéricas.
+
+        Args:
+            use_one_hot: Si True, crea one-hot encoding de aerolíneas
+
+        Returns:
+            pd.DataFrame: Un DataFrame con la fecha como índice y las nuevas
+                          features de aerolíneas.
+        """
+        file_path = self.config.get_data_path(self.config.atc_daily_acids_file)
+        if not file_path.exists():
+            self.logger.warning(f"Archivo de ACIDs no encontrado en: {file_path}. Saltando carga.")
+            return pd.DataFrame()
+
+        self.logger.info(f"Cargando datos diarios ACIDs desde: {file_path}")
+        df_raw = pd.read_csv(file_path)
+
+        if df_raw.empty:
+            self.logger.warning("El archivo de ACIDs está vacío.")
+            return pd.DataFrame()
+
+        # Transformar los datos crudos en features
+        if use_one_hot:
+            df_features = self._create_airline_one_hot_features(df_raw)
+        else:
+            df_features = self._create_airline_features(df_raw)
+
+        self.logger.info(f"Features de aerolíneas creadas: {len(df_features)} registros, {len(df_features.columns)} columnas.")
+        return df_features
+
+    def _extract_airline_code(self, flight_id: str) -> str:
+        """Extrae el código de aerolínea de un ID de vuelo."""
+        if not isinstance(flight_id, str):
+            return 'UNKNOWN'
+        # Vuelos comerciales (e.g., AAL, BAW, UAL)
+        match = re.match(r'^([A-Z]{3})', flight_id)
+        if match:
+            return match.group(1)
+        # Vuelos privados/generales (e.g., N123AB)
+        if re.match(r'^[NCT]|^[A-Z]{1,2}-', flight_id):
+            return 'PRIVATE'
+        return 'UNKNOWN'
+
+    def _safe_parse_list(self, list_str: str) -> list:
+        """Parsea de forma segura un string que representa una lista."""
+        if pd.isna(list_str) or not isinstance(list_str, str) or list_str == '':
+            return []
+        try:
+            # Usar ast.literal_eval como en tu código
+            return ast.literal_eval(list_str)
+        except Exception:
+            # Fallback: limpiar y parsear manualmente
+            cleaned = list_str.strip('[]').replace('"', '').replace("'", "")
+            if cleaned:
+                return [x.strip() for x in cleaned.split(',') if x.strip()]
+            return []
+
+    def _create_airline_features(self, df_raw: pd.DataFrame) -> pd.DataFrame:
+        """Crea features numéricas a partir de la composición de aerolíneas."""
+        major_us = {'AAL', 'UAL', 'DAL', 'SWA', 'NKS'}
+        major_eu = {'IBE', 'AFR', 'BAW', 'KLM', 'DLH', 'CFG'}
+        major_cargo = {'UPS', 'FDX', 'GTI', 'ABX'}
+
+        feature_rows = []
+        for _, row in df_raw.iterrows():
+            acids_list = self._safe_parse_list(row.get('acids_list', '[]'))
+            if not acids_list:
+                continue
+
+            airlines = [self._extract_airline_code(fid) for fid in acids_list]
+            total_flights = len(airlines)
+            
+            airline_counts = pd.Series(airlines).value_counts()
+            unique_airlines = set(airline_counts.index)
+
+            # Calcular conteos y porcentajes
+            us_flights = sum(airline_counts.get(c, 0) for c in major_us)
+            eu_flights = sum(airline_counts.get(c, 0) for c in major_eu)
+            cargo_flights = sum(airline_counts.get(c, 0) for c in major_cargo)
+            private_flights = airline_counts.get('PRIVATE', 0)
+
+            feature_rows.append({
+                'time': row[self.config.date_column],
+                'num_unique_airlines': len(unique_airlines),
+                'pct_us_major': us_flights / total_flights,
+                'pct_eu_major': eu_flights / total_flights,
+                'pct_cargo_major': cargo_flights / total_flights,
+                'pct_private': private_flights / total_flights,
+                'top_airline_pct': airline_counts.iloc[0] / total_flights if not airline_counts.empty else 0
+            })
+
+        if not feature_rows:
+            return pd.DataFrame()
+
+        df_features = pd.DataFrame(feature_rows)
+        df_features[self.config.date_column] = pd.to_datetime(df_features[self.config.date_column])
+        df_features = df_features.set_index(self.config.date_column).sort_index()
+        
+        return df_features
+    
+    def _create_airline_one_hot_features(self, df_raw: pd.DataFrame) -> pd.DataFrame:
+        """
+        Crea conteo de vuelos por aerolínea a partir de la columna acids_list.
+        
+        Cuenta cuántos vuelos tiene cada aerolínea cada día.
+        """
+        # Usar tu lógica para obtener el conjunto de todas las aerolíneas
+        all_airlines = set()
+        for acids_string in df_raw['acids_list']:
+            acids_list = self._safe_parse_list(acids_string)
+            airlines_list = [self._extract_airline_code(acid) for acid in acids_list]
+            airlines_list = [air for air in airlines_list if len(air) == 3] 
+            all_airlines.update(airlines_list)
+        
+        # Convertir a lista ordenada para consistencia
+        all_airlines = sorted(list(all_airlines))
+        
+        self.logger.info(f"Creando conteo de vuelos para {len(all_airlines)} aerolíneas únicas")
+        
+        # Crear DataFrame con conteo de vuelos por aerolínea
+        feature_rows = []
+        for _, row in df_raw.iterrows():
+            acids_list = self._safe_parse_list(row.get('acids_list', '[]'))
+            airlines_list = [self._extract_airline_code(acid) for acid in acids_list]
+            airlines_list = [air for air in airlines_list if len(air) == 3]
+            
+            # Contar vuelos por aerolínea
+            airline_counts = pd.Series(airlines_list).value_counts()
+            
+            # Crear diccionario con conteo de vuelos
+            row_features = {
+                'time': row[self.config.date_column],
+                **{f'airline_{airline}': airline_counts.get(airline, 0) 
+                  for airline in all_airlines}
+            }
+            feature_rows.append(row_features)
+        
+        if not feature_rows:
+            return pd.DataFrame()
+        
+        df_features = pd.DataFrame(feature_rows)
+        df_features[self.config.date_column] = pd.to_datetime(df_features[self.config.date_column])
+        df_features = df_features.set_index(self.config.date_column).sort_index()
+        
+        return df_features
+        
     def load_hourly_atfm_data(self) -> pd.DataFrame:
         """
         Carga datos horarios ATFM agrupados por área.
@@ -168,6 +319,11 @@ class ATCAircraftDataLoader:
             self.logger.warning(f"Error cargando datos diarios ATC: {e}")
 
         try:
+            data['daily_acids'] = self.load_daily_acids_data()
+        except Exception as e:
+            self.logger.warning(f"Error cargando datos diarios ACIDs: {e}")
+
+        try:
             data['hourly_atfm'] = self.load_hourly_atfm_data()
         except Exception as e:
             self.logger.warning(f"Error cargando datos horarios ATFM: {e}")
@@ -187,7 +343,7 @@ class ATCAircraftDataLoader:
         Obtiene datos de entrenamiento para un tipo específico.
 
         Args:
-            data_type: Tipo de datos ('daily_atc', 'hourly_atfm', 'monthly_route')
+            data_type: Tipo de datos ('daily_atc', 'daily_acids', 'hourly_atfm', 'monthly_route')
             start_date: Fecha de inicio (opcional)
             end_date: Fecha de fin (opcional)
 
@@ -197,6 +353,8 @@ class ATCAircraftDataLoader:
         # Cargar datos según tipo
         if data_type == 'daily_atc':
             df = self.load_daily_atc_data()
+        elif data_type == 'daily_acids':
+            df = self.load_daily_acids_data()
         elif data_type == 'hourly_atfm':
             df = self.load_hourly_atfm_data()
         elif data_type == 'monthly_route':
@@ -303,6 +461,22 @@ class ATCAircraftDataLoader:
             }
         except Exception as e:
             info['daily_atc'] = {'error': str(e)}
+
+        try:
+            daily_acids_df = self.load_daily_acids_data()
+            info['daily_acids'] = {
+                'records': len(daily_acids_df),
+                'date_range': f"{daily_acids_df.index.min()} to {daily_acids_df.index.max()}",
+                'columns': list(daily_acids_df.columns),
+                'target_stats': {
+                    'mean': daily_acids_df[self.config.target_column].mean(),
+                    'std': daily_acids_df[self.config.target_column].std(),
+                    'min': daily_acids_df[self.config.target_column].min(),
+                    'max': daily_acids_df[self.config.target_column].max()
+                }
+            }
+        except Exception as e:
+            info['daily_acids'] = {'error': str(e)}
 
         try:
             hourly_df = self.load_hourly_atfm_data()

@@ -351,8 +351,9 @@ class MultiModalDataLoader:
         self.news_loader = NewsDataLoader(config)
 
     def load_multimodal_data(self, data_type: str = 'daily_atc',
-                           include_weather: bool = True,
-                           include_news: bool = True) -> pd.DataFrame:
+                            use_one_hot: bool = True,
+                            include_weather: bool = True,
+                            include_news: bool = True) -> pd.DataFrame:
         """
         Carga datos multimodales combinados.
 
@@ -368,6 +369,10 @@ class MultiModalDataLoader:
 
         # Cargar datos ATC/ATFM base
         base_df = self.atc_loader.get_training_data(data_type)
+
+        if use_one_hot and data_type == 'daily_atc':
+            df_acids = self.atc_loader.load_daily_acids_data(use_one_hot=True)
+            base_df = base_df.merge(df_acids, left_index=True, right_index=True, how='left')
 
         # Fusionar datos meteorológicos
         if include_weather:
