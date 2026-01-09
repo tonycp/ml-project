@@ -25,29 +25,46 @@
 \maketitle
 
 \begin{abstract}
-    Este documento detalla el desarrollo de un sistema de predicción de tráfico aéreo para la FIR Habana. Se aborda la problemática de gestionar eficientemente el flujo de aeronaves mediante el uso de modelos de aprendizaje automático (XGBoost). El informe describe la metodología completa, desde la recolección y limpieza de datos (incluyendo la corrección crítica de conteo de vuelos únicos), hasta la ingeniería de características y la evaluación de resultados. Se discuten las implicaciones de los hallazgos y se proponen líneas de trabajo futuro.
+    Este documento detalla el desarrollo de un sistema de predicción de tráfico aéreo para la FIR Habana mediante modelos de aprendizaje automático. Se aborda la problemática crítica de gestionar eficientemente el flujo de aeronaves en un corredor estratégico del Caribe. La investigación implementa un pipeline completo de ingeniería de datos que integra registros ATFM, variables meteorológicas y eventos noticiosos. Un hallazgo metodológico clave fue la corrección del conteo de volumen mediante Identificadores Únicos Globales de Vuelo (GUFI), eliminando el sesgo de doble contabilización por sector. Se evaluaron múltiples arquitecturas (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determinándose que Random Forest ofrece la mejor relación precisión-estabilidad para predicciones diarias, alcanzando un MAE de 121 vuelos (reducción del 22\% vs baseline) con una desviación estándar de apenas 10.9. El modelo final integra variables de aerolíneas y clima, demostrando que la programación planificada es el factor dominante en la predicción de demanda. Los resultados validan la viabilidad de desplegar este sistema como herramienta de soporte a la planificación operativa de turnos de control.
+
+    \textbf{Palabras clave:} Gestión de Tráfico Aéreo, ATFM, Aprendizaje Automático, Random Forest, Series Temporales, GUFI.
+\end{abstract}
+
+\begin{abstract}
+    \textbf{Abstract (English)}
+
+    This document details the development of an air traffic forecasting system for Havana FIR using machine learning models. It addresses the critical challenge of efficiently managing aircraft flow in a strategic Caribbean corridor. The research implements a complete data engineering pipeline integrating ATFM records, meteorological variables, and news events. A key methodological finding was the correction of volume counting using Global Unique Flight Identifiers (GUFI), eliminating double-counting bias per sector. Multiple architectures were evaluated (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determining that Random Forest offers the best accuracy-stability trade-off for daily predictions, achieving a MAE of 121 flights (22\% reduction vs baseline) with a standard deviation of only 10.9. The final model integrates airline and weather variables, demonstrating that scheduled programming is the dominant factor in demand prediction. Results validate the feasibility of deploying this system as an operational planning support tool for air traffic control shift scheduling.
+
+    \textbf{Keywords:} Air Traffic Management, ATFM, Machine Learning, Random Forest, Time Series, GUFI.
 \end{abstract}
 
 \tableofcontents
 \newpage
 
 \section{Introducción}
+    La Región de Información de Vuelo (FIR) de La Habana constituye un nodo geoestratégico crítico para la navegación aérea en las Américas. Por su ubicación central en el Caribe, gestiona una porción significativa del flujo de tráfico internacional entre América del Norte y del Sur, así como el tráfico hacia y desde Europa. La capacidad de anticipar con precisión la demanda de operaciones en este espacio aéreo no es solo una cuestión logística, sino un imperativo de seguridad nacional y eficiencia económica.
+
     \subsection{Antecedentes y Contexto}
-        Breve historia del control de tráfico aéreo en la región y la necesidad de herramientas predictivas modernas.
-        
+    Tradicionalmente, la planificación del flujo de tránsito aéreo en la región se ha basado en el análisis de tendencias históricas estáticas y la experiencia empírica de los controladores senior. Sin embargo, la volatilidad introducida por eventos globales recientes (pandemia COVID-19) y la creciente saturación del espacio aéreo han dejado obsoletos los métodos de proyección lineal. La variabilidad actual exige herramientas que puedan integrar múltiples señales (clima en ruta, programación de aerolíneas, eventos sociopolíticos) para generar pronósticos dinámicos.
+
+    \subsection{Motivación}
+    El desarrollo de este sistema de predicción responde a una triple necesidad fundamental. En primer lugar, la \textbf{Seguridad Operacional} exige prevenir situaciones de saturación donde la demanda supere inadvertidamente la capacidad declarada de los sectores de control. En segundo lugar, la \textbf{Eficiencia Económica} busca optimizar la gestión del flujo (ATFM) para reducir demoras, maximizando así los ingresos por tasas de sobrevuelo al hacer más tractivo el espacio aéreo. Finalmente, la \textbf{Modernización Tecnológica} pretende alinear los servicios de navegación aérea nacionales con las recomendaciones del plan ASBU de la OACI \cite{icaoasbu}, promoviendo la toma de decisiones basada en datos (CDM) \cite{eurocontrolcdm}.
+
     \subsection{Definición del Problema}
-        Descripción formal del problema de forecasting de series temporales en este dominio.
-        
+    El problema central consiste en predecir el volumen de tráfico que transitará por la FIR Habana en horizontes diarios y horarios, superando complejidades inherentes al dominio. Estas incluyen la \textbf{heterogeneidad de datos} provenientes de fuentes dispares como AFTN y METAR; la \textbf{calidad del dato histórico}, que requiere limpieza profunda para corregir conteos duplicados mediante GUFI; y la \textbf{estacionariedad} interrumpida por cambios estructurales recientes en la industria, lo que invalida los enfoques puramente lineales.
+
     \subsection{Objetivos}
-        \subsubsection{Objetivo General}
-        \subsubsection{Objetivos Específicos}
-            \begin{itemize}
-                \item Implementar pipeline de procesamiento de datos ATFM.
-                \item Desarrollar modelos de regresión robustos.
-                \item Validar resultados con métricas cuantitativas y cualitativas.
-            \end{itemize}
+    El objetivo general de esta investigación es desarrollar un sistema de aprendizaje automático capaz de predecir la demanda de tráfico aéreo en la FIR Habana con un error menor al de los métodos de línea base actuales, integrando variables meteorológicas y operativas. Para alcanzar esta meta, se plantean los siguientes objetivos específicos:
+
+    \begin{itemize}
+        \item Diseñar un pipeline de Ingeniería de Datos (\textit{ETL}) robusto para la ingestión y limpieza de registros históricos ATFM y meteorológicos.
+        \item Validar e implementar algoritmos de corrección de volumen basados en el Identificador Único Global de Vuelo (GUFI) para eliminar el sesgo de doble conteo.
+        \item Evaluar y comparar arquitecturas de modelos predictivos (ARIMA, Random Forest, XGBoost, LSTM) para determinar la más idónea en términos de precisión y estabilidad.
+        \item Cuantificar el impacto de variables exógenas (clima, eventos sociales) en la precisión del pronóstico.
+    \end{itemize}
             
     \subsection{Alcance y Limitaciones}
+    El alcance del proyecto abarca el desarrollo de modelos para pronósticos con horizonte de 1 a 7 días. El estudio se limita a datos de la FIR Habana y no integra, en esta fase, datos de flujo en tiempo real de FIRs adyacentes (Miami, Centroamérica), lo que impone un techo teórico a la capacidad de predecir desvíos tácticos de última hora.
 
 \section{Marco Teórico}
 El presente capítulo establece los fundamentos conceptuales necesarios para comprender el alcance y la metodología del estudio. Se describe el contexto de la gestión de tráfico aéreo, las particularidades de las series temporales en este dominio y se detallan los algoritmos seleccionados para el desarrollo de los modelos predictivos.
@@ -69,7 +86,7 @@ Los modelos ARIMA (AutoRegressive Integrated Moving Average) y su variante estac
 \subsubsection{Aprendizaje Automático Basado en Árboles}
 Los métodos de ensamble basados en árboles de decisión han demostrado un rendimiento superior en datos tabulares estructurados. Random Forest construye múltiples árboles de decisión durante el entrenamiento y genera la media de las predicciones de los árboles individuales, reduciendo la varianza y el riesgo de sobreajuste \cite{breiman2001}.
 
-XGBoost (Extreme Gradient Boosting), el modelo central de este estudio, es una implementación optimizada del algoritmo de Gradient Boosting. A diferencia de Random Forest que construye árboles independientes, XGBoost construye árboles de forma secuencial, donde cada nuevo árbol intenta corregir los errores de los anteriores. Utiliza una función objetivo regularizada que controla la complejidad del modelo, haciéndolo altamente eficiente y preciso para capturar patrones no lineales en grandes conjuntos de datos \cite{chen2016}.
+XGBoost (Extreme Gradient Boosting), evaluado como alternativa de alto rendimiento, es una implementación optimizada del algoritmo de Gradient Boosting. A diferencia de Random Forest que construye árboles independientes, XGBoost construye árboles de forma secuencial, donde cada nuevo árbol intenta corregir los errores de los anteriores. Utiliza una función objetivo regularizada que controla la complejidad del modelo, haciéndolo eficiente para capturar patrones no lineales complejos \cite{chen2016}.
 
 \subsubsection{Redes Neuronales Recurrentes}
 Las redes LSTM (Long Short-Term Memory) son una arquitectura de redes neuronales recurrentes diseñada para aprender dependencias a largo plazo. A través de mecanismos de compuertas (entrada, olvido y salida), las LSTM pueden retener información relevante sobre secuencias temporales extensas mitigando el problema del gradiente desvaneciente, lo que las hace idóneas para modelar dinámicas temporales complejas \cite{hochreiter1997}.
@@ -105,8 +122,8 @@ Para la gestión de los voluminosos datos climáticos históricos, se desarroll�
 Se implementó un sistema de extracción de información (\texttt{Event\_extractor}) sobre un corpus de 13,022 noticias obtenidas del medio *Cubadebate*. El pipeline de procesamiento de lenguaje natural (NLP) incluye:
 
 \begin{enumerate}
-    \item \textbf{Extracción de Entidades y Fechas:} Utilizando la librería \texttt{spaCy} para identificar referencias temporales y entidades nombradas relevantes.
-    \item \textbf{Clasificación de Eventos:} Se evaluaron múltiples algoritmos (Naive Bayes, Random Forest, Gradient Boosting), seleccionándose \textbf{LinearSVC} por obtener el mejor desempeño con una exactitud del 95.0\% en la categorización de noticias (deportivas, políticas, culturales, etc.).
+    \item \textbf{Extracción de Entidades y Fechas:} Utilizando la librería \texttt{spaCy} \cite{spacy} para identificar referencias temporales y entidades nombradas relevantes.
+    \item \textbf{Clasificación de Eventos:} Se evaluaron múltiples algoritmos (Naive Bayes, Random Forest, Gradient Boosting), seleccionándose \textbf{LinearSVC} \cite{sklearn} por obtener el mejor desempeño con una exactitud del 95.0\% en la categorización de noticias (deportivas, políticas, culturales, etc.).
     \item \textbf{Análisis de Sentimiento:} Dado que los modelos pre-entrenados en redes sociales (como TASS-2019) mostraron un rendimiento deficiente en el dominio periodístico, se optó por un enfoque basado en diccionarios léxicos de polaridad (\texttt{KeywordSentimentClassifier}), que demostró mayor robustez para textos formales.
 \end{enumerate}
 
@@ -127,7 +144,7 @@ Para capturar la dinámica del tráfico aéreo, se generaron las siguientes vari
 \end{itemize}
 
 \subsection{Estrategia de Validación}
-Para la evaluación de los modelos, se adoptó una partición de datos respetando la secuencia temporal, reservando los últimos 7 días del conjunto de datos exclusivamente para la prueba (testing). Esta estrategia "out-of-sample" simula un escenario real de pronóstico operativo. Las métricas seleccionadas para la comparación de modelos incluyen MAE, RMSE, $R^2$ y MAPE, priorizando la robustez ante valores atípicos y la precisión en la tendencia.
+Para la evaluación de los modelos, se adoptó una partición de datos respetando la secuencia temporal, reservando los últimos 7 días del conjunto de datos exclusivamente para la prueba (testing). Esta estrategia "out-of-sample" simula un escenario real de pronóstico operativo \cite{bergmeir2012}. Las métricas seleccionadas para la comparación de modelos incluyen MAE, RMSE, $R^2$ y MAPE, priorizando la robustez ante valores atípicos y la precisión en la tendencia.
 
 \section{Desarrollo e Implementación}
 Este capítulo profundiza en la materialización de la solución propuesta, describiendo la arquitectura técnica del sistema, la implementación específica de los algoritmos de predicción y los procesos de optimización aplicados para maximizar su desempeño.
@@ -148,7 +165,7 @@ Se ha implementado un abanico de modelos predictivos, definidos en el módulo \t
 \end{itemize}
 
 \subsection{Optimización de Hiperparámetros}
-Para mejorar el rendimiento de los modelos base, se llevó a cabo un proceso sistemático de ajuste de hiperparámetros (\textit{hyperparameter tuning}). Se utilizó una estrategia de Búsqueda de Cuadrícula (\textit{Grid Search}) con validación cruzada temporal (\textit{Time Series Cross-Validation}) para evitar la fuga de datos del futuro al pasado.
+Para mejorar el rendimiento de los modelos base, se llevó a cabo un proceso sistemático de ajuste de hiperparámetros (\textit{hyperparameter tuning}). Se utilizó una estrategia de Búsqueda de Cuadrícula (\textit{Grid Search}) \cite{bergstra2012} con validación cruzada temporal (\textit{Time Series Cross-Validation}) para evitar la fuga de datos del futuro al pasado.
 
 Para el modelo XGBoost, los parámetros clave optimizados incluyeron:
 \begin{itemize}
@@ -158,48 +175,112 @@ Para el modelo XGBoost, los parámetros clave optimizados incluyeron:
 \end{itemize}
 
 \subsection{Configuración Final}
-Tras el proceso de experimentación, la configuración que ofreció el mejor compromiso entre precisión y estabilidad para el modelo XGBoost desplegado fue:
+Tras el proceso de experimentación y validación con datos diarios, el modelo \textbf{Random Forest} demostró mayor estabilidad y capacidad de generalización que XGBoost para este horizonte temporal específico. La configuración óptima seleccionada fue:
 \begin{itemize}
-    \item \texttt{learning\_rate}: 0.05
-    \item \texttt{max\_depth}: 6
-    \item \texttt{n\_estimators}: 500
-    \item \texttt{subsample}: 0.8 (para reducir varianza mediante el submuestreo de filas)
-    \item \texttt{colsample\_bytree}: 0.8 (submuestreo de columnas por árbol)
+    \item \texttt{n\_estimators}: 100 (número de árboles en el bosque)
+    \item \texttt{max\_depth}: None (crecimiento ilimitado de los árboles para capturar relaciones complejas)
+    \item \texttt{min\_samples\_split}: 2
+    \item \texttt{min\_samples\_leaf}: 1
+    \item \texttt{random\_state}: 42 (para reproducibilidad)
 \end{itemize}
-Esta configuración permitió al modelo generalizar correctamente sobre los días de prueba, reaccionando adecuadamente a los patrones horarios y a la influencia de los días festivos.
+Esta configuración sencilla pero robusta permitió al modelo aprovechar la dimensionalidad de las variables de aerolíneas sin caer en el sobreajuste que mostraron modelos más sensitivos como XGBoost en el dataset diario.
 
 \section{Resultados}
-    \subsection{Desempeño Global del Modelo}
-        Tabla comparativa de métricas en el conjunto de prueba.
-        
-    \subsection{Análisis Temporal de Predicciones}
-        Gráficos de series temporales (Real vs Predicho) para el horizonte de prueba.
-        
-    \subsection{Importancia de Características}
-        Análisis de qué variables influyen más en la predicción.
+En esta sección se presentan los resultados experimentales obtenidos evaluando el desempeño de los modelos sobre datos agregados diariamente. Se prioriza este horizonte temporal por su relevancia para la planificación estratégica de recursos a mediano plazo.
+
+    \subsection{Comparación de Configuraciones Experimentales}
+    Se evaluaron múltiples configuraciones incrementales para determinar el impacto de las variables exógenas. La Tabla \ref{tab:resultados} resume las métricas obtenidas tanto para el mejor modelo individual como para el promedio de todas las arquitecturas evaluadas.
+
+    \begin{table}[h]
+        \centering
+        \caption{Resultados de rendimiento en conjunto de validación (Frecuencia Diaria)}
+        \label{tab:resultados}
+        \begin{tabular}{lcccc}
+            \toprule
+            \textbf{Configuración} & \textbf{Mejor Modelo} & \textbf{MAE (Mejor)} & \textbf{Mejora Promedio vs Base} \\
+            \midrule
+            Baseline (Solo Tráfico) & Random Forest & 155.17 & 0.00\% \\
+            + Variables Meteorológicas & Random Forest & 144.46 & -7.65\% (ruido en modelos simples) \\
+            + Aerolíneas (OneHot) & XGBoost & 124.15 & +5.16\% \\
+            \textbf{+ Aerolíneas + Clima} & \textbf{Random Forest} & \textbf{121.45} & \textbf{+4.15\%} \\
+            + Completo (+Noticias Agg) & Random Forest & 123.07 & \textbf{+5.64\%} (Mayor robustez global) \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+
+    Aunque la configuración completa (Aerolíneas + Clima + Noticias Agregadas) obtuvo la mejor mejora promedio global (+5.64\%) a través de todos los tipos de modelos, para el caso específico del modelo ganador (Random Forest), la configuración más parsimoniosa de \textit{Aerolíneas + Clima} entregó el error absoluto más bajo (MAE 121.45).
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.95\textwidth]{../models/train_results/combined_analysis.png}
+        \caption{Análisis comparativo: (a) Mejora relativa porcentual, (b) Desempeño por tipo de modelo, (c) Impacto por configuración, (d) Mejor modelo por configuración.}
+        \label{fig:combined_analysis}
+    \end{figure}
+
+    \subsection{Análisis de Consistencia y Estabilidad}
+    Un hallazgo crucial del estudio fue la variabilidad del desempeño entre arquitecturas. Medido por la desviación estándar ($\sigma$) de los errores entre múltiples ejecuciones:
+    \begin{itemize}
+        \item \textbf{Random Forest ($\sigma \approx 10.9$):} Mostró la mayor estabilidad, produciendo resultados consistentes independientemente de pequeñas variaciones en los datos de entrenamiento.
+        \item \textbf{XGBoost ($\sigma \approx 19.8$):} Aunque capaz de alcanzar métricas excelentes, mostró mayor sensibilidad a la configuración.
+        \item \textbf{LSTM ($\sigma \approx 1866$):} Exhibió una inestabilidad extrema en este dataset diario, descartándose para uso operativo.
+    \end{itemize}
+
+    \subsection{Desempeño del Modelo Óptimo}
+    La Figura \ref{fig:learning_curve} muestra la curva de aprendizaje del modelo seleccionado. Se observa una convergencia saludable entre el error de entrenamiento y validación a medida que aumenta el tamaño de la muestra, aunque la brecha persistente sugiere que la incorporación de más historia (años anteriores a 2024) podría beneficiar aún más al sistema.
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.8\textwidth]{../models/train_results/learning_curve_best_model.png}
+        \caption{Curva de aprendizaje del modelo Random Forest óptimo. La convergencia indica un buen ajuste sin sobreentrenamiento severo.}
+        \label{fig:learning_curve}
+    \end{figure}
 
 \section{Discusión}
-    \subsection{Interpretación de los Resultados}
-        ¿El modelo captura correctamente los picos y valles? ¿Cómo se comporta en días atípicos?
-        
-    \subsection{Análisis de Errores}
-        Identificación de momentos con mayor error y posibles causas (e.g., eventos no capturados por las features).
-        
-    \subsection{Impacto de la Calidad de los Datos}
-        Discusión sobre la reducción de volumen observada tras corregir la lógica de agregación y la persistencia de volúmenes altos en picos.
-        
-    \subsection{Implicaciones Operativas}
-        Utilidad práctica del modelo para los controladores y planificadores.
+    Este capítulo analiza las implicaciones de los resultados obtenidos, interpretando el comportamiento de los modelos en el contexto operativo real y contrastando la teoría con la evidencia empírica recolectada durante la experimentación.
+
+    \subsection{Interpretación Estructural y Estabilidad}
+    Los resultados confirman que el tráfico aéreo no es un fenómeno puramente estocástico, sino altamente estructurado. La mejora del $R^2$ de 0.21 a 0.46 al incluir variables de aerolíneas valida la hipótesis de que el modelo está aprendiendo los "slots" o itinerarios pre-asignados.
+    
+    Un hallazgo crítico para la implementación es el compromiso entre potencia y estabilidad. Mientras arquitecturas como XGBoost mostraron picos de alto rendimiento en configuraciones específicas, también exhibieron una desviación estándar en el error casi el doble que Random Forest ($\sigma \approx 19.8$ vs $\sigma \approx 10.9$). En un entorno de seguridad crítica como el control de tráfico aéreo, la consistencia predictiva de Random Forest es un activo superior a la ganancia marginal de precisión de modelos más inestables.
+
+    \subsection{La Brecha de Varianza}
+    El techo de desempeño observado ($R^2 \approx 0.46$) no debe interpretarse como una falla del modelado, sino como una caracterización de la naturaleza del tráfico en la FIR Habana. La varianza no explicada corresponde a:
+    \begin{itemize}
+        \item \textbf{Aviación General y Ejecutiva:} Vuelos no regulares que no aparecen en itinerarios comerciales.
+        \item \textbf{Sobrevuelos Dinámicos:} Aeronaves que cruzan la FIR por razones meteorológicas en rutas adyacentes, cuya decisión es táctica (minuto a minuto) y no estratégica.
+        \item \textbf{Factores Exógenos no Locales:} Retrasos en aeropuertos de origen (e.g., Miami, Panamá) que afectan el flujo pero no son visibles para un modelo entrenado solo con datos locales.
+    \end{itemize}
+
+    \subsection{Impacto Operativo: Reducción de Incertidumbre}
+    Desde una perspectiva pragmática, el valor del sistema reside en la reducción de la incertidumbre. Pasar de un error medio de 155 vuelos (Baseline) a 121 vuelos (Modelo Propuesto) implica una reducción de error de 34 aeronaves por día.
+    
+    En términos operativos, esto equivale aproximadamente a la carga de trabajo de un turno de control o a la capacidad de un sector en hora pico. Disponer de esta precisión mejorada permite a la jefatura de tránsito ajustar la dotación de personal con mayor certeza, pasando de una planificación reactiva basada en promedios históricos a una proactiva basada en la realidad programada y climática del día.
 
 \section{Conclusiones y Recomendaciones}
+    A continuación se sintetizan los hallazgos principales de la investigación y se proponen estrategias concretas para la transición de estos modelos hacia un entorno de producción operativo.
+
     \subsection{Conclusiones}
-    \subsection{Trabajo Futuro}
+    El presente estudio ha logrado establecer un marco robusto para la predicción de tráfico aéreo en la FIR Habana, validando la eficacia de la integración de fuentes de datos heterogéneas. Las principales conclusiones derivadas de la experimentación son:
+
+    \begin{itemize}
+        \item \textbf{Supremacía de la Programación Planificada:} La variable más determinante para reducir el error de predicción fue la inclusión explícita de los operadores aéreos. Esto confirma que el tráfico aéreo es un sistema altamente estructurado donde la "intención" de vuelo (schedule) pesa más que las variables ambientales locales.
+        \item \textbf{Validación Metodológica del Dato:} La corrección del conteo mediante GUFI fue tan determinante como la elección del algoritmo. Sin una representación fiel de la carga de trabajo real (vuelos únicos vs conteos por sector), cualquier modelo avanzado habría convergido a predicciones erróneas.
+        \item \textbf{Robustez vs Complejidad:} Random Forest demostró ser superior a alternativas más complejas como XGBoost o LSTM para este horizonte diario ($\sigma \approx 10.9$). Su capacidad para manejar la alta dimensionalidad sin sobreajuste lo convierte en la opción más segura para el despliegue operativo inicial.
+        \item \textbf{Benchmark de Desempeño:} El $R^2 \approx 0.46$ establece un techo de rendimiento realista para modelos basados exclusivamente en información local. Superar esta barrera requerirá necesariamente la integración de datos de flujo de FIRs adyacentes (Miami, Centroamérica) para capturar la dinámica exógena.
+    \end{itemize}
+
+    \subsection{Recomendaciones y Trabajo Futuro}
+    Basado en los hallazgos, se sugieren las siguientes líneas de acción para la evolución del sistema:
+
+    \begin{enumerate}
+        \item \textbf{Adopción Operativa:} Desplegar el modelo Random Forest (Config: Aerolíneas + Clima) como herramienta de soporte a la planificación estratégica, utilizándolo para detectar discrepancias entre el plan de vuelo y la capacidad real esperada.
+        \item \textbf{Integración en Tiempo Real:} Migrar del procesamiento por lotes a una arquitectura de streaming conectada a la red AFTN/AMHS, permitiendo re-calcular predicciones intra-dia ante cambios súbitos de meteorología.
+        \item \textbf{Sistema de Alertas de Desviación:} Implementar un monitor que compare el tráfico real vs predicho en ventanas de 4 horas; una divergencia sostenida $>20\%$ debería disparar alertas de "Evento Anómalo" no capturado por el modelo base.
+        \item \textbf{Refinamiento de Noticias con LLMs:} Sustituir la clasificación léxica actual por Modelos de Lenguaje (LLMs) capaces de evaluar semánticamente la gravedad de una noticia (e.g., distinguir "cierre de aeropuerto" de "retraso menor").
+    \end{enumerate}
 
 \bibliographystyle{ieeetr}
 \bibliography{referencias}
 
-\appendix
-\section{Anexos}
-    \subsection{Fragmentos de Código Relevantes}
 
 \end{document}
