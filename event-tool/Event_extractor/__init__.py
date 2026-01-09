@@ -5,7 +5,7 @@ Este paquete proporciona herramientas para extraer eventos (con fecha y tipo)
 de contenido de noticias en español.
 
 Uso básico:
-    from Event_extractor import EventExtractionPipeline, NewsContent
+    from src.Event_extractor import EventExtractionPipeline, NewsContent
     from datetime import datetime
     
     # Crear pipeline

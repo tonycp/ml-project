@@ -12,9 +12,9 @@ from datetime import datetime
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
-from Event_extractor.models.news import NewsContent
-from Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
+from src.Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
+from src.Event_extractor.models.news import NewsContent
+from src.Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
 
 print("=" * 70)
 print("🧪 TEST MANUAL DEL PIPELINE DE EXTRACCIÓN DE EVENTOS")
@@ -116,7 +116,7 @@ print("⚙️  PROCESANDO NOTICIA...")
 print("=" * 70)
 
 print("\n🔍 Paso 1: Preprocesando texto...")
-from Event_extractor.utils.text_preprocessor import _tokenize_text, get_processed_text
+from src.Event_extractor.utils.text_preprocessor import _tokenize_text, get_processed_text
 
 tokens = _tokenize_text(news.text)
 print(f"   ✅ {len(tokens)} tokens extraídos")
@@ -133,7 +133,7 @@ if doc.ents:
         print(f"      ... y {len(doc.ents) - 10} más")
 
 print("\n🔍 Paso 3: Extrayendo fechas...")
-from Event_extractor.extractors.date_extractor import DateExtractor
+from src.Event_extractor.extractors.date_extractor import DateExtractor
 date_extractor = DateExtractor(reference_date=publication_date)
 dates = date_extractor.extract_dates(tokens)
 print(f"   ✅ {len(dates)} fecha(s) encontrada(s):")
@@ -160,7 +160,7 @@ print(f"   {emoji} Sentimiento: {sentiment.value}")
 print(f"   📊 Confianza: {sent_conf:.1%}")
 
 print("\n🔍 Paso 6: Extrayendo entidades SVO...")
-from Event_extractor.utils.text_preprocessor import extract_svo
+from src.Event_extractor.utils.text_preprocessor import extract_svo
 svo_triples = extract_svo(doc)
 print(f"   ✅ {len(svo_triples)} triples SVO encontrados:")
 for subj, verb, obj in svo_triples[:5]:

@@ -5,13 +5,13 @@ Este ejemplo muestra cómo el sistema clasifica eventos como
 positivos, negativos o neutrales.
 """
 
-from Event_extractor import (
+from src.Event_extractor import (
     EventExtractionPipeline,
     EventSentimentClassifier,
     NewsContent,
     EventSentiment
 )
-from Event_extractor.utils.text_preprocessor import _tokenize_text
+from src.Event_extractor.utils.text_preprocessor import _tokenize_text
 from datetime import datetime
 
 

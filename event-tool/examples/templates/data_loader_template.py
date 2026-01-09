@@ -8,7 +8,7 @@ según tu fuente de datos específica.
 
 from typing import List, Dict, Any
 from datetime import datetime
-from Event_extractor import NewsContent
+from src.Event_extractor import NewsContent
 
 
 def load_news_from_json_file(filepath: str) -> List[NewsContent]:
@@ -285,7 +285,7 @@ def complete_pipeline_example():
     """
     Ejemplo completo: desde la carga hasta la extracción de eventos.
     """
-    from Event_extractor import EventExtractionPipeline, EventAggregator
+    from src.Event_extractor import EventExtractionPipeline, EventAggregator
     
     # 1. Cargar noticias (usa la función apropiada para tu fuente)
     print("Cargando noticias...")

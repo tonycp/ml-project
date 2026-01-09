@@ -12,13 +12,13 @@ import sys
 from pathlib import Path
 
 # Agregar directorio raíz al path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from datasets import load_dataset
 from sklearn.metrics import classification_report, accuracy_score
-from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
-from Event_extractor.models.event import EventSentiment
+from src.Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+from src.Event_extractor.models.event import EventSentiment
 
 
 def main():

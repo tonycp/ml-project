@@ -67,7 +67,7 @@ class EventExtractionPipeline:
             if sklearn_model_path is None:
                 # Usar modelo por defecto
                 from pathlib import Path
-                project_root = Path(__file__).parent.parent.parent
+                project_root = Path(__file__).parent.parent
                 sklearn_model_path = str(project_root / "models" / "sklearn_spanish_svm.pkl")
             
             self.type_classifier = SklearnNewsClassifier(

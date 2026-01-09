@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 # Agregar directorio raíz al path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Event_extractor.classifiers.news_type import SklearnNewsClassifier
-from Event_extractor.classifiers.ml.model_configs import get_model_config
-from Event_extractor.classifiers.ml.corpus_loaders import SpanishNewsCorpus
+from src.Event_extractor.classifiers.news_type import SklearnNewsClassifier
+from src.Event_extractor.classifiers.ml.model_configs import get_model_config
+from src.Event_extractor.classifiers.ml.corpus_loaders import SpanishNewsCorpus
 
 def train_and_save_model():
     """Entrena y guarda el modelo SVM Linear con Spanish News."""
@@ -80,7 +80,7 @@ def train_and_save_model():
     print("=" * 80)
     print()
     print("Para usar el modelo en el pipeline:")
-    print("   from Event_extractor.pipeline.event_pipeline import EventExtractionPipeline")
+    print("   from src.Event_extractor.pipeline.event_pipeline import EventExtractionPipeline")
     print("   pipeline = EventExtractionPipeline(use_sklearn_classifier=True)")
     print()
     

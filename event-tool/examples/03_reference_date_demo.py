@@ -9,11 +9,11 @@ import sys
 from pathlib import Path
 
 # Agregar el directorio raíz al path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Event_extractor import DateExtractor
-from Event_extractor.utils.text_preprocessor import _tokenize_text
+from src.Event_extractor import DateExtractor
+from src.Event_extractor.utils.text_preprocessor import _tokenize_text
 from datetime import datetime
 
 
@@ -93,7 +93,7 @@ def test_with_pipeline():
     print("USO CON PIPELINE - Usa fecha de metadata automáticamente")
     print("="*70)
     
-    from Event_extractor import EventExtractionPipeline, NewsContent
+    from src.Event_extractor import EventExtractionPipeline, NewsContent
     
     # Pipeline sin reference_date explícito
     pipeline = EventExtractionPipeline()

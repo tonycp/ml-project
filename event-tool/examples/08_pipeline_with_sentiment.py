@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 
 # Agregar directorio raíz al path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from datetime import datetime
-from Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
-from Event_extractor.models.news import NewsContent
-from Event_extractor.classifiers.sentiment import (
+from src.Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
+from src.Event_extractor.models.news import NewsContent
+from src.Event_extractor.classifiers.sentiment import (
     KeywordSentimentClassifier,
     MarIASentimentClassifier,
     SklearnSentimentClassifier
@@ -140,13 +140,13 @@ def main():
     pipeline = EventExtractionPipeline(classify_sentiment=True)
     
     # Con MarIA/RoBERTa
-    from Event_extractor.classifiers.sentiment import MarIASentimentClassifier
+    from src.Event_extractor.classifiers.sentiment import MarIASentimentClassifier
     pipeline = EventExtractionPipeline(
         sentiment_classifier=MarIASentimentClassifier()
     )
     
     # Con Sklearn entrenado
-    from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+    from src.Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
     clf = SklearnSentimentClassifier.load_model("models/sklearn_tass_sentiment.pkl")
     pipeline = EventExtractionPipeline(sentiment_classifier=clf)
     """)

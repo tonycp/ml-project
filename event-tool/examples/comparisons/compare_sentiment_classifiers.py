@@ -12,10 +12,10 @@ import os
 from pathlib import Path
 
 # Agregar directorio raíz al path (dos niveles arriba desde examples/ml_classification/)
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Event_extractor.classifiers.sentiment import (
+from src.Event_extractor.classifiers.sentiment import (
     KeywordSentimentClassifier,
     MarIASentimentClassifier,
     SklearnSentimentClassifier

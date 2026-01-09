@@ -18,9 +18,9 @@ from collections import Counter
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
-from Event_extractor.models.news import NewsContent
-from Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
+from src.Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
+from src.Event_extractor.models.news import NewsContent
+from src.Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
 
 print("📰 EXTRACCIÓN DE EVENTOS DESDE NOTICIAS.DB")
 print("=" * 70)

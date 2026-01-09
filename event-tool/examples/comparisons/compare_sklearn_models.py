@@ -17,7 +17,7 @@ import time
 from collections import defaultdict
 
 # Agregar directorio raíz al path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 print("🔬 COMPARACIÓN DE MODELOS SKLEARN CON CORPUS TASS")
@@ -39,7 +39,7 @@ except ImportError as e:
     print("   pip install datasets scikit-learn")
     sys.exit(1)
 
-from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier, KeywordSentimentClassifier
+from src.Event_extractor.classifiers.sentiment import SklearnSentimentClassifier, KeywordSentimentClassifier
 from datasets import load_dataset
 
 print("\n" + "=" * 70)
@@ -297,7 +297,7 @@ print("=" * 70)
 print(f"""
 Para guardar el mejor modelo ({mejor_modelo}):
 
-from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+from src.Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
 from sklearn.{modelos_config[mejor_modelo].__class__.__module__} import {mejor_modelo}
 
 # Entrenar

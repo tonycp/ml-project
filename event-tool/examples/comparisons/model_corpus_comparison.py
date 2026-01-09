@@ -41,10 +41,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Event_extractor.classifiers.ml.corpus_loaders import get_corpus
-from Event_extractor.classifiers.news_type import SklearnNewsClassifier
-from Event_extractor.classifiers.ml.model_configs import get_model_configs
-from Event_extractor.utils.text_preprocessor import tokenize_texts_batch
+from src.Event_extractor.classifiers.ml.corpus_loaders import get_corpus
+from src.Event_extractor.classifiers.news_type import SklearnNewsClassifier
+from src.Event_extractor.classifiers.ml.model_configs import get_model_configs
+from src.Event_extractor.utils.text_preprocessor import tokenize_texts_batch
 import time
 import json
 

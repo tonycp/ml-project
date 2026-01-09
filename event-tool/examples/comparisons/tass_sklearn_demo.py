@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Agregar directorio raíz al path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 print("🤖 CLASIFICADOR SKLEARN/TASS PARA SENTIMENT ANALYSIS")
@@ -34,7 +34,7 @@ print("\n" + "=" * 70)
 print("🔧 ENTRENANDO CLASIFICADOR CON CORPUS TASS")
 print("=" * 70)
 
-from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier, KeywordSentimentClassifier
+from src.Event_extractor.classifiers.sentiment import SklearnSentimentClassifier, KeywordSentimentClassifier
 from datasets import load_dataset
 
 print("\n📥 Cargando corpus TASS...")
@@ -172,8 +172,8 @@ print("\n" + "=" * 70)
 print("🔄 USO EN PIPELINE")
 print("=" * 70)
 
-from Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
-from Event_extractor.models.news import NewsContent
+from src.Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
+from src.Event_extractor.models.news import NewsContent
 from datetime import datetime
 
 # Noticia de ejemplo
@@ -240,7 +240,7 @@ print("""
 pip install datasets scikit-learn
 
 # 2. Entrenar clasificador con TASS
-from Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
+from src.Event_extractor.classifiers.sentiment import SklearnSentimentClassifier
 from datasets import load_dataset
 
 dataset = load_dataset("mrm8488/tass-2019")
@@ -258,7 +258,7 @@ clf.save_model("models/mi_modelo_tass.pkl")
 clf = SklearnSentimentClassifier.load_model("models/mi_modelo_tass.pkl")
 
 # 6. Usar en pipeline
-from Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
+from src.Event_extractor.pipeline.event_pipeline import EventExtractionPipeline
 
 pipeline = EventExtractionPipeline(
     sentiment_classifier=clf
@@ -270,7 +270,7 @@ eventos = pipeline.extract_events(news_content)
 print("\n📚 ALTERNATIVAS SIN ENTRENAMIENTO:")
 print("""
 # Clasificador basado en keywords (sin dependencias)
-from Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
+from src.Event_extractor.classifiers.sentiment import KeywordSentimentClassifier
 clf = KeywordSentimentClassifier()
 sentiment, conf = clf.classify("Texto positivo")
 """)
