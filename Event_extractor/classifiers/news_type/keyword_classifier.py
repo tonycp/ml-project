@@ -1,23 +1,35 @@
 """
 Clasificador de tipos de eventos usando reglas y keywords.
+Implementa la interfaz NewsTypeClassifier.
 """
 
-from typing import Dict, List, Tuple
-from ..models.event import EventType
+from typing import Dict, List, Tuple, Optional
+from ...models.event import EventType
+from .base import NewsTypeClassifier
 
 
-class EventTypeClassifier:
+class KeywordNewsClassifier(NewsTypeClassifier):
     """
-    Clasificador de tipos de eventos basado en palabras clave y reglas.
+    Clasificador de tipos de noticias basado en palabras clave y reglas.
     
     Analiza el texto de una noticia para determinar el tipo de evento
     (cultural, deportivo, meteorológico, etc.) basándose en la presencia
     de palabras clave específicas.
+    
+    Hereda de NewsTypeClassifier para ser compatible con el pipeline.
     """
     
     def __init__(self):
         """Inicializa el clasificador con las palabras clave para cada tipo."""
         self._initialize_keywords()
+    
+    def get_name(self) -> str:
+        """Nombre del clasificador."""
+        return "Keyword-based Classifier"
+    
+    def get_description(self) -> str:
+        """Descripción del clasificador."""
+        return "Clasificador basado en palabras clave y reglas manuales"
     
     def _initialize_keywords(self):
         """Define las palabras clave para cada tipo de evento."""

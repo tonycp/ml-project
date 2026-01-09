@@ -13,7 +13,6 @@ Event_extractor/
 ├── __init__.py                    # Punto de entrada principal del paquete
 ├── models/                        # Modelos de datos
 │   ├── __init__.py
-│   ├── news.py                    # NewsContent, NewsMetadata
 │   └── event.py                   # Event, EventType
 ├── extractors/                    # Extractores de información
 │   ├── __init__.py
@@ -33,11 +32,6 @@ Event_extractor/
 ## Componentes Principales
 
 ### 1. Modelos de Datos (`models/`)
-
-#### NewsMetadata
-Almacena metadatos de una noticia:
-- Título, fecha de publicación, fuente
-- Autor, categoría, URL, tags
 
 #### NewsContent
 Representa el contenido completo de una noticia:

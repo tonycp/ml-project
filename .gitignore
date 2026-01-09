@@ -12,6 +12,7 @@
 *.env
 *.rar
 *.data
+*.venv
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

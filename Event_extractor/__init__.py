@@ -5,21 +5,17 @@ Este paquete proporciona herramientas para extraer eventos (con fecha y tipo)
 de contenido de noticias en español.
 
 Uso básico:
-    from Event_extractor import EventExtractionPipeline, NewsContent, NewsMetadata
+    from Event_extractor import EventExtractionPipeline, NewsContent
     from datetime import datetime
     
     # Crear pipeline
     pipeline = EventExtractionPipeline()
     
     # Crear contenido de noticia
-    metadata = NewsMetadata(
-        title="Festival de música en enero",
-        date=datetime.now(),
-        source="Ejemplo"
-    )
     news = NewsContent(
+        id="news_001",
         text="El festival se realizará del 10 al 15 de enero de 2025...",
-        metadata=metadata
+        publication_date=datetime.now()
     )
     
     # Extraer eventos
@@ -32,14 +28,13 @@ Uso básico:
 __version__ = "0.1.0"
 
 # Importar clases principales
-from .models import NewsMetadata, NewsContent, Event, EventType, EventSentiment
+from .models import NewsContent, Event, EventType, EventSentiment
 from .pipeline import EventExtractionPipeline, EventAggregator
 from .extractors import DateExtractor
 from .classifiers import EventTypeClassifier, EventSentimentClassifier
 
 __all__ = [
     # Modelos de datos
-    'NewsMetadata',
     'NewsContent',
     'Event',
     'EventType',

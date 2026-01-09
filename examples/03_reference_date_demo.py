@@ -5,6 +5,13 @@ Este ejemplo muestra cómo el extractor evita fechas erróneas cuando
 no hay una fecha de referencia explícita.
 """
 
+import sys
+from pathlib import Path
+
+# Agregar el directorio raíz al path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from Event_extractor import DateExtractor
 from Event_extractor.utils.text_preprocessor import _tokenize_text
 from datetime import datetime
@@ -86,18 +93,12 @@ def test_with_pipeline():
     print("USO CON PIPELINE - Usa fecha de metadata automáticamente")
     print("="*70)
     
-    from Event_extractor import EventExtractionPipeline, NewsContent, NewsMetadata
+    from Event_extractor import EventExtractionPipeline, NewsContent
     
     # Pipeline sin reference_date explícito
     pipeline = EventExtractionPipeline()
     
     # Noticia con metadata que incluye fecha de publicación
-    metadata = NewsMetadata(
-        title="Festival Musical",
-        date=datetime(2024, 11, 20),  # Fecha de publicación
-        source="Diario Local"
-    )
-    
     news = NewsContent(
         text="El gran festival se realizará del 10 al 15 de enero. Habrá conciertos todos los días.",
         metadata=metadata,

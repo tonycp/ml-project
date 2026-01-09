@@ -32,20 +32,16 @@ class DateExtractor:
         self.reference_date = reference_date
         self._has_reference_date = reference_date is not None
         
-        # Cargar modelo de spaCy para español
-        try:
-            self.nlp = spacy.load("es_core_news_sm")
-        except OSError:
-            raise RuntimeError(
-                "El modelo de spaCy 'es_core_news_sm' no está instalado. "
-                "Ejecuta: python -m spacy download es_core_news_sm"
-            )
-        
         # Mapeo de meses
         self.meses_map = {
             'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
             'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
             'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+        }
+        self.weekdays_map = {
+            'lunes': 0, 'martes': 1, 'miércoles': 2, 'miercoles': 2,
+            'jueves': 3, 'viernes': 4, 'sábado': 5, 'sabado': 5,
+            'domingo': 6
         }
     
     def extract_dates(self, tokens: List[str]) -> List[datetime]:
@@ -227,4 +223,134 @@ class DateExtractor:
                 dates.append(self.reference_date + timedelta(weeks=1))
             elif expr == "próximo" and i+1 < len(tokens) and tokens[i+1] == "mes":
                 dates.append(self.reference_date + relativedelta(months=1))
+            elif expr == "próximo" and i+1 < len(tokens) and tokens[i+1] == "año":
+                dates.append(self.reference_date + relativedelta(years=1))
+            elif expr == "última" and i+1 < len(tokens) and tokens[i+1] == "semana":
+                dates.append(self.reference_date - timedelta(weeks=1))
+            elif expr == "último" and i+1 < len(tokens) and tokens[i+1] == "mes":
+                dates.append(self.reference_date - relativedelta(months=1))
+            elif expr == "último" and i+1 < len(tokens) and tokens[i+1] == "año":
+                dates.append(self.reference_date - relativedelta(years=1))
+            elif expr == "próximo" and i+1 < len(tokens) and tokens[i+1] in self.meses_map:
+                mes_str = tokens[i+1]
+                mes = self.meses_map.get(mes_str)
+                year = self.reference_date.year
+                if mes < self.reference_date.month:
+                    year += 1
+                try:
+                    fecha = datetime(year, mes, 1)
+                    dates.append(fecha)
+                except Exception:
+                    continue
+            elif expr == "este" and i+1 < len(tokens) and tokens[i+1] in self.meses_map:
+                mes_str = tokens[i+1]
+                mes = self.meses_map.get(mes_str)
+                year = self.reference_date.year
+                try:
+                    fecha = datetime(year, mes, 1)
+                    dates.append(fecha)
+                except Exception:
+                    continue
+            elif expr == "último" and i+1 < len(tokens) and tokens[i+1] in self.meses_map:
+                mes_str = tokens[i+1]
+                mes = self.meses_map.get(mes_str)
+                year = self.reference_date.year
+                if mes > self.reference_date.month:
+                    year -= 1
+                try:
+                    fecha = datetime(year, mes, 1)
+                    dates.append(fecha)
+                except Exception:
+                    continue
+            elif expr == "próximo" and i+2 < len(tokens) and tokens[i+1].isdigit() and tokens[i+2] in self.meses_map:
+                dia = int(tokens[i+1])
+                mes_str = tokens[i+2]
+                mes = self.meses_map.get(mes_str)
+                year = self.reference_date.year
+                if mes < self.reference_date.month or (mes == self.reference_date.month and dia < self.reference_date.day):
+                    year += 1
+                try:
+                    fecha = datetime(year, mes, dia)
+                    dates.append(fecha)
+                except Exception:
+                    continue
+            elif expr == "este" and i+2 < len(tokens) and tokens[i+1].isdigit() and tokens[i+2] in self.meses_map:
+                dia = int(tokens[i+1])
+                mes_str = tokens[i+2]
+                mes = self.meses_map.get(mes_str)
+                year = self.reference_date.year
+                try:
+                    fecha = datetime(year, mes, dia)
+                    dates.append(fecha)
+                except Exception:
+                    continue
+            elif expr == "último" and i+2 < len(tokens) and tokens[i+1].isdigit() and tokens[i+2] in self.meses_map:
+                dia = int(tokens[i+1])
+                mes_str = tokens[i+2]
+                mes = self.meses_map.get(mes_str)
+                year = self.reference_date.year
+                if mes > self.reference_date.month or (mes == self.reference_date.month and dia > self.reference_date.day):
+                    year -= 1
+                try:
+                    fecha = datetime(year, mes, dia)
+                    dates.append(fecha)
+                except Exception:
+                    continue
+            #Con los dias de la semana
+            elif expr == "próximo" and i+1 < len(tokens) and tokens[i+1] in self.weekdays_map:
+                reference_week_day = self.reference_date.weekday()
+                target_week_day = self.weekdays_map[tokens[i+1]]
+                if target_week_day > reference_week_day:
+                    days_ahead = target_week_day - reference_week_day
+                else:
+                    days_ahead = 7 - (reference_week_day - target_week_day)
+                fecha = self.reference_date + timedelta(days=days_ahead)
+                dates.append(fecha)
+            elif expr == "último" and i+1 < len(tokens) and tokens[i+1] in self.weekdays_map:
+                reference_week_day = self.reference_date.weekday()
+                target_week_day = self.weekdays_map[tokens[i+1]]
+                if target_week_day < reference_week_day:
+                    days_behind = reference_week_day - target_week_day
+                else:
+                    days_behind = 7 - (target_week_day - reference_week_day)
+                fecha = self.reference_date - timedelta(days=days_behind)
+                dates.append(fecha)
+            elif expr in self.weekdays_map:
+                reference_week_day = self.reference_date.weekday()
+                target_week_day = self.weekdays_map[expr]
+                days_ahead = (target_week_day - reference_week_day) % 7
+                fecha = self.reference_date + timedelta(days=days_ahead)
+                dates.append(fecha)
+            elif expr == "este" and i+1 < len(tokens) and tokens[i+1] in self.weekdays_map:
+                reference_week_day = self.reference_date.weekday()
+                target_week_day = self.weekdays_map[tokens[i+1]]
+                days_ahead = (target_week_day - reference_week_day) % 7
+                fecha = self.reference_date + timedelta(days=days_ahead)
+                dates.append(fecha)
+            # caso "siguiente mes" o "mes siguiente" (lo mismo con anio)
+            elif expr == "siguiente" and i+1 < len(tokens) and tokens[i+1] == "mes":
+                fecha = self.reference_date + relativedelta(months=1)
+                dates.append(fecha)
+            elif expr == "mes" and i+1 < len(tokens) and tokens[i+1] == "siguiente":
+                fecha = self.reference_date + relativedelta(months=1)
+                dates.append(fecha)
+            elif expr == "siguiente" and i+1 < len(tokens) and tokens[i+1] == "año":
+                fecha = self.reference_date + relativedelta(years=1)
+                dates.append(fecha)
+            elif expr == "año" and i+1 < len(tokens) and tokens[i+1] == "siguiente":
+                fecha = self.reference_date + relativedelta(years=1)
+                dates.append(fecha)
+            # anterior mes / año
+            elif expr == "anterior" and i+1 < len(tokens) and tokens[i+1] == "mes":
+                fecha = self.reference_date - relativedelta(months=1)
+                dates.append(fecha)
+            elif expr == "mes" and i+1 < len(tokens) and tokens[i+1] == "anterior":
+                fecha = self.reference_date - relativedelta(months=1)
+                dates.append(fecha)
+            elif expr == "anterior" and i+1 < len(tokens) and tokens[i+1] == "año":
+                fecha = self.reference_date - relativedelta(years=1)
+                dates.append(fecha)
+            elif expr == "año" and i+1 < len(tokens) and tokens[i+1] == "anterior":
+                fecha = self.reference_date - relativedelta(years=1)
+                dates.append(fecha)
         return dates

@@ -8,7 +8,7 @@ según tu fuente de datos específica.
 
 from typing import List, Dict, Any
 from datetime import datetime
-from Event_extractor import NewsContent, NewsMetadata
+from Event_extractor import NewsContent
 
 
 def load_news_from_json_file(filepath: str) -> List[NewsContent]:
@@ -50,12 +50,6 @@ def load_news_from_json_file(filepath: str) -> List[NewsContent]:
             news_date = datetime.now()
         
         # Crear metadata
-        metadata = NewsMetadata(
-            title=item.get('title', ''),
-            date=news_date,
-            source=item.get('source', 'Unknown'),
-            author=item.get('author'),
-            category=item.get('category'),
             url=item.get('url'),
             tags=item.get('tags')
         )
@@ -103,12 +97,6 @@ def load_news_from_csv_file(filepath: str) -> List[NewsContent]:
                 news_date = datetime.now()
             
             # Crear metadata
-            metadata = NewsMetadata(
-                title=row.get('title', ''),
-                date=news_date,
-                source=row.get('source', 'Unknown'),
-                author=row.get('author'),
-                category=row.get('category'),
                 url=row.get('url')
             )
             
@@ -161,12 +149,6 @@ def load_news_from_api(api_url: str, api_key: str = None) -> List[NewsContent]:
             news_date = datetime.now()
         
         # Crear metadata
-        metadata = NewsMetadata(
-            title=item.get('title', ''),
-            date=news_date,
-            source=item.get('source', {}).get('name', 'Unknown'),
-            author=item.get('author'),
-            url=item.get('url')
         )
         
         # Crear NewsContent
@@ -223,12 +205,6 @@ def load_news_from_database(connection_string: str, query: str = None) -> List[N
             news_date = datetime.now()
         
         # Crear metadata
-        metadata = NewsMetadata(
-            title=title,
-            date=news_date,
-            source=source,
-            author=author,
-            category=category,
             url=url
         )
         
@@ -279,12 +255,6 @@ def load_news_from_rss(rss_url: str) -> List[NewsContent]:
             news_date = datetime.now()
         
         # Crear metadata
-        metadata = NewsMetadata(
-            title=entry.get('title', ''),
-            date=news_date,
-            source=feed.feed.get('title', 'RSS Feed'),
-            author=entry.get('author'),
-            url=entry.get('link')
         )
         
         # Crear NewsContent
@@ -377,12 +347,6 @@ def create_sample_news() -> List[NewsContent]:
     news_list = []
     for item in sample_data:
         from dateutil import parser
-        
-        metadata = NewsMetadata(
-            title=item['title'],
-            date=parser.parse(item['date']),
-            source=item['source']
-        )
         
         news = NewsContent(
             text=item['text'],

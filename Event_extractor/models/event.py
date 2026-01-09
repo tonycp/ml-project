@@ -77,19 +77,16 @@ class Event:
         date: Fecha del evento
         event_type: Tipo de evento
         sentiment: Sentimiento del evento (positivo, negativo, neutral)
-        title: Título o descripción del evento (opcional)
-        description: Descripción detallada del evento (opcional)
-        source_news_id: ID de la noticia de origen (opcional)
+        source_news_id: ID de la noticia de origen
+        entidades_asociadas: Lista de entidades nombradas asociadas al evento
         confidence: Nivel de confianza en la extracción (0.0 a 1.0)
         sentiment_confidence: Nivel de confianza en la clasificación de sentimiento (0.0 a 1.0)
     """
     date: datetime
     event_type: EventType
+    source_news_id: str
     sentiment: EventSentiment = EventSentiment.NEUTRAL
-    title: Optional[str] = None # Quizas innecesario
-    description: Optional[str] = None # Quizas innecesario
-    source_news_id: Optional[str] = None # Quizas innecesario
-    entidades_asociadas: Optional[list] = None  # Lista de entidades nombradas asociadas al evento
+    entidades_asociadas: Optional[list] = None
     confidence: float = 1.0
     sentiment_confidence: float = 1.0
     

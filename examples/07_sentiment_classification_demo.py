@@ -9,7 +9,6 @@ from Event_extractor import (
     EventExtractionPipeline,
     EventSentimentClassifier,
     NewsContent,
-    NewsMetadata,
     EventSentiment
 )
 from Event_extractor.utils.text_preprocessor import _tokenize_text
@@ -108,16 +107,10 @@ def test_with_pipeline():
     print("\n📰 Procesando noticias...\n")
     
     for i, news_data in enumerate(news_examples, 1):
-        metadata = NewsMetadata(
-            title=news_data["title"],
-            date=datetime(2024, 12, 20),
-            source="Diario de Prueba"
-        )
-        
         news = NewsContent(
+            id=f"news_{i:03d}",
             text=news_data["text"],
-            metadata=metadata,
-            title=news_data["title"]
+            publication_date=datetime(2024, 12, 20)
         )
         
         events = pipeline.extract_events(news)

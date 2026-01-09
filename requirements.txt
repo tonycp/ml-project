@@ -2,6 +2,9 @@
 spacy>=3.0.0
 python-dateutil>=2.8.0
 tqdm>=4.65.0
+scikit-learn>=1.0.0
+datasets>=2.0.0
+numpy>=1.21.0
 
 # Dependencias de Machine Learning y Forecasting
 pandas>=1.5.0

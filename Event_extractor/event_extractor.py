@@ -14,7 +14,7 @@ from typing import Optional, Any
 from datetime import datetime
 
 # Importar desde los nuevos módulos
-from .models.news import NewsMetadata, NewsContent
+from .models.news import NewsContent
 from .models.event import Event, EventType
 
 
@@ -38,21 +38,10 @@ class NewsProcessor:
         # Esta es una implementación placeholder
         # El formato exacto dependerá de cómo lleguen las noticias
         
-        metadata = NewsMetadata(
-            title=raw_input.get('title', ''),
-            date=raw_input.get('date', datetime.now()),
-            source=raw_input.get('source', ''),
-            author=raw_input.get('author'),
-            category=raw_input.get('category'),
-            url=raw_input.get('url'),
-            tags=raw_input.get('tags')
-        )
-        
         news_content = NewsContent(
+            id=raw_input.get('id', 'unknown'),
             text=raw_input.get('text', ''),
-            metadata=metadata,
-            title=raw_input.get('title'),
-            raw_data=raw_input
+            publication_date=raw_input.get('date', datetime.now())
         )
         
         return news_content
@@ -60,7 +49,6 @@ class NewsProcessor:
 
 # Exportar todo para compatibilidad
 __all__ = [
-    'NewsMetadata',
     'NewsContent',
     'Event',
     'EventType',

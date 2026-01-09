@@ -5,10 +5,16 @@ Este ejemplo muestra cómo usar el pipeline completo para extraer
 eventos de noticias.
 """
 
+import sys
+from pathlib import Path
+
+# Agregar el directorio raíz al path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from Event_extractor import (
     EventExtractionPipeline,
     NewsContent,
-    NewsMetadata,
     EventAggregator,
     EventType
 )
@@ -28,22 +34,15 @@ def main():
     print("Ejemplo 1: Festival de música")
     print("="*60)
     
-    metadata1 = NewsMetadata(
-        title="Gran Festival de Música en la Ciudad",
-        date=datetime(2024, 12, 1),
-        source="Periódico Cultural",
-        category="entretenimiento"
-    )
-    
     news1 = NewsContent(
+        id="news_001",
         text=(
             "El gran festival de música de la ciudad se realizará del 10 al 15 de "
             "enero de 2025 en el parque central. El evento contará con la participación "
             "de artistas nacionales e internacionales. Habrá conciertos de rock, pop "
             "y música electrónica. Las entradas ya están a la venta."
         ),
-        metadata=metadata1,
-        title="Gran Festival de Música en la Ciudad"
+        publication_date=datetime(2024, 12, 1)
     )
     
     events1 = pipeline.extract_events(news1)
@@ -54,22 +53,15 @@ def main():
     print("Ejemplo 2: Evento deportivo")
     print("="*60)
     
-    metadata2 = NewsMetadata(
-        title="Final del Campeonato Nacional",
-        date=datetime(2024, 12, 1),
-        source="Diario Deportivo",
-        category="deportes"
-    )
-    
     news2 = NewsContent(
+        id="news_002",
         text=(
             "La final del campeonato nacional de fútbol se jugará el próximo "
             "25 de diciembre de 2024 en el estadio principal. Los dos mejores "
             "equipos de la liga se enfrentarán por el título. El partido comenzará "
             "a las 20:00 horas."
         ),
-        metadata=metadata2,
-        title="Final del Campeonato Nacional"
+        publication_date=datetime(2024, 12, 1)
     )
     
     events2 = pipeline.extract_events(news2)
@@ -80,22 +72,15 @@ def main():
     print("Ejemplo 3: Alerta meteorológica")
     print("="*60)
     
-    metadata3 = NewsMetadata(
-        title="Alerta por Tormenta",
-        date=datetime(2024, 12, 20),
-        source="Servicio Meteorológico",
-        category="clima"
-    )
-    
     news3 = NewsContent(
+        id="news_003",
         text=(
             "Se ha emitido una alerta meteorológica para mañana debido a una "
             "fuerte tormenta que afectará la región. Se esperan lluvias intensas "
             "y vientos de hasta 80 km/h. Se recomienda a la población tomar "
             "precauciones y evitar salir de sus hogares."
         ),
-        metadata=metadata3,
-        title="Alerta por Tormenta"
+        publication_date=datetime(2024, 12, 20)
     )
     
     events3 = pipeline.extract_events(news3)
