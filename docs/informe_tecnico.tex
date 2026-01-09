@@ -18,7 +18,7 @@
 }
 
 \title{\textbf{Predicción de la Cantidad de Aeronaves en el Espacio Aéreo Cubano} \\ \large Informe Técnico Final}
-\author{Equipo de Desarrollo}
+\author{}
 \date{\today}
 
 \begin{document}
@@ -31,8 +31,8 @@
     \textbf{Palabras clave:} Gestión de Tráfico Aéreo, ATFM, Aprendizaje Automático, XGBoost, Random Forest, Series Temporales, GUFI.
 \end{abstract}
 
+\renewcommand{\abstractname}{Abstract}
 \begin{abstract}
-    \textbf{Abstract (English)}
 
     This document details the development of an air traffic forecasting system for Havana FIR using machine learning models. It addresses the critical challenge of efficiently managing aircraft flow in a strategic Caribbean corridor. The research implements a complete data engineering pipeline integrating ATFM records, meteorological variables, and news events. A key methodological finding was the correction of volume counting using Global Unique Flight Identifiers (GUFI), eliminating double-counting bias per sector. Multiple architectures were evaluated (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determining that XGBoost achieves the best absolute performance with a MAE of 121.85 flights, while Random Forest offers the highest operational stability (σ=9.86). The best average configuration integrates airline, weather, and news variables, achieving a 27.61\% improvement over baseline. Results validate the feasibility of deploying these models as operational planning support tools for air traffic control shift scheduling.
 
@@ -78,11 +78,22 @@ Un componente crítico en la medición del volumen de tráfico es el Identificad
 \subsection{Análisis de Series Temporales en Aviación}
 El tráfico aéreo se caracteriza por exhibir patrones temporales altamente definidos. Se observa una fuerte estacionalidad a múltiples niveles: ciclos diarios determinados por los horarios comerciales de las aerolíneas, ciclos semanales con variaciones entre días laborables y fines de semana, y ciclos anuales influenciados por temporadas turísticas y festividades. El problema de predicción se aborda analizando estas componentes (tendencia, estacionalidad y ruido) en la serie histórica para proyectar valores futuros en un horizonte definido \cite{boxjenkins}.
 
+% --- COMIENZO DEL TEXTO NUEVO ---
+\subsection{Investigación Previa y Motivación para un Estudio Comparativo}
+El desarrollo del presente sistema predictivo tuvo como punto de partida una investigación exploratoria centrada en la aplicabilidad de \textit{Facebook Prophet} al contexto de la FIR Habana \cite{largacha2025prophet}. Dicho estudio, realizado sobre datos históricos del mismo corredor aéreo, confirmó la capacidad de Prophet para capturar eficientemente las estacionalidades múltiples (horaria, diaria, semanal) inherentes al tráfico aéreo, logrando una reducción del Error Absoluto Medio (MAE) del 22\% respecto a los modelos lineales utilizados tradicionalmente en la planificación operativa local.
+
+Sin embargo, dicho trabajo identificó una limitación crítica para el despliegue operativo: el desempeño de Prophet se degrada significativamente en la predicción de \textbf{picos operacionales} (MAPE del 94.6\% en el percentil 95 de densidad). Este comportamiento se atribuye al tratamiento de valores extremos como ruido ($\epsilon_t$) dentro de su modelo aditivo generalizado, en lugar de como componentes estructurales del sistema. Además, el modelo mostró una alta sensibilidad a la acumulación de incertidumbre en horizontes superiores a 24 horas, con una cobertura de intervalos de confianza que caía por debajo del 80\%.
+
+Estos hallazgos establecieron un \textbf{benchmark inicial} y plantearon preguntas clave: ¿Es esta limitación una propiedad inherente de Prophet, o existen otros algoritmos más adecuados para manejar la variabilidad extrema y la no-linealidad del tráfico aéreo en la región? Para responder a esto, y con el objetivo de desarrollar una herramienta con la estabilidad necesaria para un entorno de seguridad crítica, la presente investigación expande el enfoque hacia una \textbf{evaluación comparativa sistemática} de múltiples familias de algoritmos. Se busca así identificar no solo el modelo con mejor precisión puntual, sino aquel que ofrezca el mejor equilibrio entre rendimiento absoluto, estabilidad operativa y capacidad para generalizar en regímenes de alta densidad.
+% --- FIN DEL TEXTO NUEVO ---
+
 \subsection{Algoritmos de Predicción Utilizados}
 En este estudio se han implementado y comparado diversos enfoques de modelado, abarcando desde estadísticas clásicas hasta aprendizaje profundo.
 
 \subsubsection{Modelos Estadísticos y Aditivos}
-Los modelos ARIMA (AutoRegressive Integrated Moving Average) y su variante estacional SARIMA constituyen la línea base clásica para la predicción de series temporales. Estos modelos asumen que los valores futuros son una función lineal de los valores pasados y los errores pasados \cite{hyndman2018}. Por otro lado, Prophet es un modelo aditivo desarrollado por Facebook, diseñado para manejar series temporales con fuertes efectos estacionales y días festivos. Descompone la serie en componentes de tendencia, estacionalidad y eventos, siendo particularmente robusto frente a valores atípicos y cambios en la tendencia \cite{taylor2018}.
+Los modelos ARIMA (AutoRegressive Integrated Moving Average) y su variante estacional SARIMA constituyen la línea base clásica para la predicción de series temporales. Estos modelos asumen que los valores futuros son una función lineal de los valores pasados y los errores pasados \cite{hyndman2018}. Por otro lado, \textbf{Prophet} es un modelo aditivo desarrollado por Facebook, diseñado para manejar series temporales con fuertes efectos estacionales y días festivos. Descompone la serie en componentes de tendencia, estacionalidad y eventos, siendo particularmente robusto frente a valores atípicos y cambios en la tendencia \cite{taylor2018}.
+
+Un estudio precursor aplicado a la FIR Habana \cite{largacha2025prophet} demostró la eficacia de Prophet para capturar estacionalidades múltiples (diarias, semanales), logrando una reducción del 22\% en el MAE respecto a modelos lineales tradicionales. Sin embargo, dicho estudio también reveló una limitación crítica: Prophet tiende a tratar los picos operacionales extremos como ruido, subestimándolos sistemáticamente (MAPE del 94.6\% en el percentil 95 de densidad). Esta característica, junto con su degradación en horizontes superiores a 24 horas, motivó su inclusión en el presente estudio como punto de referencia clave. El objetivo es contrastar su desempeño, especialmente en condiciones de alta congestión, con modelos capaces de capturar relaciones no lineales más complejas y ofrecer mayor estabilidad predictiva en escenarios operativos críticos.
 
 \subsubsection{Aprendizaje Automático Basado en Árboles}
 Los métodos de ensamble basados en árboles de decisión han demostrado un rendimiento superior en datos tabulares estructurados. Random Forest construye múltiples árboles de decisión durante el entrenamiento y genera la media de las predicciones de los árboles individuales, reduciendo la varianza y el riesgo de sobreajuste \cite{breiman2001}.
