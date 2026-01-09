@@ -8,6 +8,7 @@
 \usepackage{subcaption}
 \usepackage{amsmath}
 \usepackage{float}
+\usepackage{textgreek}
 
 \geometry{
     left=3cm,
@@ -25,17 +26,17 @@
 \maketitle
 
 \begin{abstract}
-    Este documento detalla el desarrollo de un sistema de predicción de tráfico aéreo para la FIR Habana mediante modelos de aprendizaje automático. Se aborda la problemática crítica de gestionar eficientemente el flujo de aeronaves en un corredor estratégico del Caribe. La investigación implementa un pipeline completo de ingeniería de datos que integra registros ATFM, variables meteorológicas y eventos noticiosos. Un hallazgo metodológico clave fue la corrección del conteo de volumen mediante Identificadores Únicos Globales de Vuelo (GUFI), eliminando el sesgo de doble contabilización por sector. Se evaluaron múltiples arquitecturas (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determinándose que Random Forest ofrece la mejor relación precisión-estabilidad para predicciones diarias, alcanzando un MAE de 121 vuelos (reducción del 22\% vs baseline) con una desviación estándar de apenas 10.9. El modelo final integra variables de aerolíneas y clima, demostrando que la programación planificada es el factor dominante en la predicción de demanda. Los resultados validan la viabilidad de desplegar este sistema como herramienta de soporte a la planificación operativa de turnos de control.
+    Este documento detalla el desarrollo de un sistema de predicción de tráfico aéreo para la FIR Habana mediante modelos de aprendizaje automático. Se aborda la problemática crítica de gestionar eficientemente el flujo de aeronaves en un corredor estratégico del Caribe. La investigación implementa un pipeline completo de ingeniería de datos que integra registros ATFM, variables meteorológicas y eventos noticiosos. Un hallazgo metodológico clave fue la corrección del conteo de volumen mediante Identificadores Únicos Globales de Vuelo (GUFI), eliminando el sesgo de doble contabilización por sector. Se evaluaron múltiples arquitecturas (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determinándose que XGBoost alcanza el mejor rendimiento absoluto con un MAE de 121.85 vuelos, mientras que Random Forest ofrece la mayor estabilidad operativa (σ=9.86). La mejor configuración promedio integra variables de aerolíneas, clima y noticias, logrando una mejora del 27.61\% respecto al baseline. Los resultados validan la viabilidad de desplegar estos modelos como herramientas de soporte a la planificación operativa de turnos de control.
 
-    \textbf{Palabras clave:} Gestión de Tráfico Aéreo, ATFM, Aprendizaje Automático, Random Forest, Series Temporales, GUFI.
+    \textbf{Palabras clave:} Gestión de Tráfico Aéreo, ATFM, Aprendizaje Automático, XGBoost, Random Forest, Series Temporales, GUFI.
 \end{abstract}
 
 \begin{abstract}
     \textbf{Abstract (English)}
 
-    This document details the development of an air traffic forecasting system for Havana FIR using machine learning models. It addresses the critical challenge of efficiently managing aircraft flow in a strategic Caribbean corridor. The research implements a complete data engineering pipeline integrating ATFM records, meteorological variables, and news events. A key methodological finding was the correction of volume counting using Global Unique Flight Identifiers (GUFI), eliminating double-counting bias per sector. Multiple architectures were evaluated (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determining that Random Forest offers the best accuracy-stability trade-off for daily predictions, achieving a MAE of 121 flights (22\% reduction vs baseline) with a standard deviation of only 10.9. The final model integrates airline and weather variables, demonstrating that scheduled programming is the dominant factor in demand prediction. Results validate the feasibility of deploying this system as an operational planning support tool for air traffic control shift scheduling.
+    This document details the development of an air traffic forecasting system for Havana FIR using machine learning models. It addresses the critical challenge of efficiently managing aircraft flow in a strategic Caribbean corridor. The research implements a complete data engineering pipeline integrating ATFM records, meteorological variables, and news events. A key methodological finding was the correction of volume counting using Global Unique Flight Identifiers (GUFI), eliminating double-counting bias per sector. Multiple architectures were evaluated (ARIMA, Prophet, Random Forest, XGBoost, LSTM), determining that XGBoost achieves the best absolute performance with a MAE of 121.85 flights, while Random Forest offers the highest operational stability (σ=9.86). The best average configuration integrates airline, weather, and news variables, achieving a 27.61\% improvement over baseline. Results validate the feasibility of deploying these models as operational planning support tools for air traffic control shift scheduling.
 
-    \textbf{Keywords:} Air Traffic Management, ATFM, Machine Learning, Random Forest, Time Series, GUFI.
+    \textbf{Keywords:} Air Traffic Management, ATFM, Machine Learning, XGBoost, Random Forest, Time Series, GUFI.
 \end{abstract}
 
 \tableofcontents
@@ -133,6 +134,25 @@ Los datos de tráfico provienen de archivos ATFM y reportes ATC. Durante la fase
 \subsection{Fusión e Integración de Datos}
 El reto principal consistió en la unificación de fuentes con diferentes frecuencias y naturalezas. Se estableció una frecuencia base horaria, alineando los registros meteorológicos mediante promedios horarios y proyectando el impacto de los eventos noticiosos en ventanas temporales específicas asociadas a sus fechas de ocurrencia.
 
+\subsubsection{Estrategias de Codificación de Variables Categóricas}
+Dado que tanto los datos de aerolíneas como las noticias son de naturaleza categórica, se evaluaron dos enfoques de preprocesamiento para su integración en los modelos:
+
+\textbf{Codificación One-Hot (OneHot=True):}
+Esta estrategia crea una variable binaria independiente para cada categoría única. Para el caso de aerolíneas, cada operador (e.g., American Airlines, Copa Airlines) recibe su propia columna con valores 0/1 indicando presencia/ausencia en el día. Para noticias, cada categoría temática (política, deportes, economía) se representa de forma similar.
+
+\textit{Ventajas:} Permite al modelo aprender patrones específicos por aerolínea o tipo de evento, capturando efectos individuales como la estacionalidad particular de rutas turísticas vs comerciales.
+
+\textit{Desventajas:} Incrementa significativamente la dimensionalidad del espacio de características (+50 columnas para aerolíneas), lo que puede causar dispersión de datos en modelos lineales.
+
+\textbf{Codificación Agregada (Aggregated):}
+En este enfoque, se calculan estadísticas agregadas por categoría. Para aerolíneas, se computa el conteo total de vuelos por operador en la ventana temporal. Para noticias, se agrega el número de eventos por categoría temática.
+
+\textit{Ventajas:} Reduce drásticamente la dimensionalidad, generando solo una variable numérica por fuente de datos.
+
+\textit{Desventajas:} Pierde la granularidad individual, imposibilitando la detección de patrones específicos de aerolíneas o eventos particulares.
+
+El análisis experimental reveló que para datos de aerolíneas, la codificación One-Hot fue superior (mejora promedio +26.70\% vs baseline), mientras que para noticias, la estrategia agregada mostró resultados ligeramente mejores en configuraciones complejas, sugiriendo que el impacto noticioso es más difuso y menos específico por categoría.
+
 \subsection{Ingeniería de Características}
 Para capturar la dinámica del tráfico aéreo, se generaron las siguientes variables predictoras:
 
@@ -144,7 +164,7 @@ Para capturar la dinámica del tráfico aéreo, se generaron las siguientes vari
 \end{itemize}
 
 \subsection{Estrategia de Validación}
-Para la evaluación de los modelos, se adoptó una partición de datos respetando la secuencia temporal, reservando los últimos 7 días del conjunto de datos exclusivamente para la prueba (testing). Esta estrategia "out-of-sample" simula un escenario real de pronóstico operativo \cite{bergmeir2012}. Las métricas seleccionadas para la comparación de modelos incluyen MAE, RMSE, $R^2$ y MAPE, priorizando la robustez ante valores atípicos y la precisión en la tendencia.
+Para la evaluación de los modelos, se adoptó una partición de datos respetando la secuencia temporal, reservando los últimos 7 días del conjunto de datos exclusivamente para la prueba (testing). Esta estrategia ``out-of-sample`` simula un escenario real de pronóstico operativo \cite{bergmeir2012}. Las métricas seleccionadas para la comparación de modelos incluyen MAE, RMSE, $R^2$ y MAPE, priorizando la robustez ante valores atípicos y la precisión en la tendencia.
 
 \section{Desarrollo e Implementación}
 Este capítulo profundiza en la materialización de la solución propuesta, describiendo la arquitectura técnica del sistema, la implementación específica de los algoritmos de predicción y los procesos de optimización aplicados para maximizar su desempeño.
@@ -195,20 +215,21 @@ En esta sección se presentan los resultados experimentales obtenidos evaluando 
         \centering
         \caption{Resultados de rendimiento en conjunto de validación (Frecuencia Diaria)}
         \label{tab:resultados}
-        \begin{tabular}{lcccc}
+        \begin{tabular}{lccc}
             \toprule
-            \textbf{Configuración} & \textbf{Mejor Modelo} & \textbf{MAE (Mejor)} & \textbf{Mejora Promedio vs Base} \\
+            \textbf{Configuración} & \textbf{Mejor Modelo} & \textbf{MAE} & \textbf{Mejora vs Baseline} \\
             \midrule
-            Baseline (Solo Tráfico) & Random Forest & 155.17 & 0.00\% \\
-            + Variables Meteorológicas & Random Forest & 144.46 & -7.65\% (ruido en modelos simples) \\
-            + Aerolíneas (OneHot) & XGBoost & 124.15 & +5.16\% \\
-            \textbf{+ Aerolíneas + Clima} & \textbf{Random Forest} & \textbf{121.45} & \textbf{+4.15\%} \\
-            + Completo (+Noticias Agg) & Random Forest & 123.07 & \textbf{+5.64\%} (Mayor robustez global) \\
+            BASELINE & Random Forest & 155.17 & -- \\
+            WEATHER & Random Forest & 140.94 & +14.84\% \\
+            AEROLINEAS (OneHot) & Random Forest & 124.15 & +26.70\% \\
+            AEROLINEAS + WEATHER & Random Forest & 123.79 & +27.32\% \\
+            \textbf{AEROLINEAS + NEWS + WEATHER} & \textbf{Random Forest} & \textbf{124.19} & \textbf{+27.61\%} \\
+            AEROLINEAS + NEWS (Agg) & \textbf{XGBoost} & \textbf{121.85} & +26.09\% \\
             \bottomrule
         \end{tabular}
     \end{table}
 
-    Aunque la configuración completa (Aerolíneas + Clima + Noticias Agregadas) obtuvo la mejor mejora promedio global (+5.64\%) a través de todos los tipos de modelos, para el caso específico del modelo ganador (Random Forest), la configuración más parsimoniosa de \textit{Aerolíneas + Clima} entregó el error absoluto más bajo (MAE 121.45).
+    El mejor rendimiento absoluto fue alcanzado por \textbf{XGBoost} con la configuración ``Aerolíneas + Noticias Agregadas`` (MAE: 121.85 vuelos). Sin embargo, la configuración que ofrece la mejor mejora promedio a través de todos los modelos evaluados es ``Aerolíneas + Noticias + Clima`` (+27.61\%), donde Random Forest alcanza un MAE de 124.19 vuelos.
 
     \begin{figure}[H]
         \centering
@@ -220,9 +241,10 @@ En esta sección se presentan los resultados experimentales obtenidos evaluando 
     \subsection{Análisis de Consistencia y Estabilidad}
     Un hallazgo crucial del estudio fue la variabilidad del desempeño entre arquitecturas. Medido por la desviación estándar ($\sigma$) de los errores entre múltiples ejecuciones:
     \begin{itemize}
-        \item \textbf{Random Forest ($\sigma \approx 10.9$):} Mostró la mayor estabilidad, produciendo resultados consistentes independientemente de pequeñas variaciones en los datos de entrenamiento.
-        \item \textbf{XGBoost ($\sigma \approx 19.8$):} Aunque capaz de alcanzar métricas excelentes, mostró mayor sensibilidad a la configuración.
-        \item \textbf{LSTM ($\sigma \approx 1866$):} Exhibió una inestabilidad extrema en este dataset diario, descartándose para uso operativo.
+        \item \textbf{Random Forest ($\sigma = 9.86$):} Mostró la mayor estabilidad entre los modelos de aprendizaje automático, produciendo resultados consistentes independientemente de pequeñas variaciones en los datos de entrenamiento.
+        \item \textbf{XGBoost ($\sigma = 20.27$):} Aunque capaz de alcanzar el mejor MAE absoluto, mostró más del doble de variabilidad que Random Forest.
+        \item \textbf{LSTM ($\sigma = 143.48$):} Exhibió una inestabilidad significativa en este dataset diario, descartándose para uso operativo.
+        \item \textbf{ARIMA/Prophet ($\sigma = 0$):} Modelos determinísticos sin variabilidad, pero con MAE muy superiores (>330).
     \end{itemize}
 
     \subsection{Desempeño del Modelo Óptimo}
@@ -241,7 +263,7 @@ En esta sección se presentan los resultados experimentales obtenidos evaluando 
     \subsection{Interpretación Estructural y Estabilidad}
     Los resultados confirman que el tráfico aéreo no es un fenómeno puramente estocástico, sino altamente estructurado. La mejora del $R^2$ de 0.21 a 0.46 al incluir variables de aerolíneas valida la hipótesis de que el modelo está aprendiendo los "slots" o itinerarios pre-asignados.
     
-    Un hallazgo crítico para la implementación es el compromiso entre potencia y estabilidad. Mientras arquitecturas como XGBoost mostraron picos de alto rendimiento en configuraciones específicas, también exhibieron una desviación estándar en el error casi el doble que Random Forest ($\sigma \approx 19.8$ vs $\sigma \approx 10.9$). En un entorno de seguridad crítica como el control de tráfico aéreo, la consistencia predictiva de Random Forest es un activo superior a la ganancia marginal de precisión de modelos más inestables.
+    Un hallazgo crítico para la implementación es el compromiso entre potencia y estabilidad. XGBoost alcanzó el mejor MAE absoluto (121.85), pero exhibió una desviación estándar ($\sigma = 20.27$) más del doble que Random Forest ($\sigma = 9.86$). En un entorno de seguridad crítica como el control de tráfico aéreo, la consistencia predictiva de Random Forest lo convierte en la opción más segura para despliegue operativo, a pesar de tener un MAE ligeramente superior (123.79-124.19 según configuración).
 
     \subsection{La Brecha de Varianza}
     El techo de desempeño observado ($R^2 \approx 0.46$) no debe interpretarse como una falla del modelado, sino como una caracterización de la naturaleza del tráfico en la FIR Habana. La varianza no explicada corresponde a:
@@ -256,16 +278,13 @@ En esta sección se presentan los resultados experimentales obtenidos evaluando 
     
     En términos operativos, esto equivale aproximadamente a la carga de trabajo de un turno de control o a la capacidad de un sector en hora pico. Disponer de esta precisión mejorada permite a la jefatura de tránsito ajustar la dotación de personal con mayor certeza, pasando de una planificación reactiva basada en promedios históricos a una proactiva basada en la realidad programada y climática del día.
 
-\section{Conclusiones y Recomendaciones}
-    A continuación se sintetizan los hallazgos principales de la investigación y se proponen estrategias concretas para la transición de estos modelos hacia un entorno de producción operativo.
-
-    \subsection{Conclusiones}
+\section{Conclusiones}
     El presente estudio ha logrado establecer un marco robusto para la predicción de tráfico aéreo en la FIR Habana, validando la eficacia de la integración de fuentes de datos heterogéneas. Las principales conclusiones derivadas de la experimentación son:
 
     \begin{itemize}
-        \item \textbf{Supremacía de la Programación Planificada:} La variable más determinante para reducir el error de predicción fue la inclusión explícita de los operadores aéreos. Esto confirma que el tráfico aéreo es un sistema altamente estructurado donde la "intención" de vuelo (schedule) pesa más que las variables ambientales locales.
+        \item \textbf{Supremacía de la Programación Planificada:} La variable más determinante para reducir el error de predicción fue la inclusión explícita de los operadores aéreos. La mejor configuración promedio (Aerolíneas + Noticias + Clima) logró una mejora del 27.61\% respecto al baseline, confirmando que el tráfico aéreo es un sistema altamente estructurado donde la ``intención`` de vuelo pesa más que las variables ambientales locales.
         \item \textbf{Validación Metodológica del Dato:} La corrección del conteo mediante GUFI fue tan determinante como la elección del algoritmo. Sin una representación fiel de la carga de trabajo real (vuelos únicos vs conteos por sector), cualquier modelo avanzado habría convergido a predicciones erróneas.
-        \item \textbf{Robustez vs Complejidad:} Random Forest demostró ser superior a alternativas más complejas como XGBoost o LSTM para este horizonte diario ($\sigma \approx 10.9$). Su capacidad para manejar la alta dimensionalidad sin sobreajuste lo convierte en la opción más segura para el despliegue operativo inicial.
+        \item \textbf{Trade-off Precisión vs Estabilidad:} XGBoost alcanzó el mejor MAE absoluto (121.85), pero Random Forest demostró ser más estable ($\sigma = 9.86$ vs $\sigma = 20.27$). Para despliegue operativo en entornos críticos, la consistencia de Random Forest (MAE 123.79-124.19) lo convierte en la opción más segura.
         \item \textbf{Benchmark de Desempeño:} El $R^2 \approx 0.46$ establece un techo de rendimiento realista para modelos basados exclusivamente en información local. Superar esta barrera requerirá necesariamente la integración de datos de flujo de FIRs adyacentes (Miami, Centroamérica) para capturar la dinámica exógena.
     \end{itemize}
 
@@ -275,8 +294,8 @@ En esta sección se presentan los resultados experimentales obtenidos evaluando 
     \begin{enumerate}
         \item \textbf{Adopción Operativa:} Desplegar el modelo Random Forest (Config: Aerolíneas + Clima) como herramienta de soporte a la planificación estratégica, utilizándolo para detectar discrepancias entre el plan de vuelo y la capacidad real esperada.
         \item \textbf{Integración en Tiempo Real:} Migrar del procesamiento por lotes a una arquitectura de streaming conectada a la red AFTN/AMHS, permitiendo re-calcular predicciones intra-dia ante cambios súbitos de meteorología.
-        \item \textbf{Sistema de Alertas de Desviación:} Implementar un monitor que compare el tráfico real vs predicho en ventanas de 4 horas; una divergencia sostenida $>20\%$ debería disparar alertas de "Evento Anómalo" no capturado por el modelo base.
-        \item \textbf{Refinamiento de Noticias con LLMs:} Sustituir la clasificación léxica actual por Modelos de Lenguaje (LLMs) capaces de evaluar semánticamente la gravedad de una noticia (e.g., distinguir "cierre de aeropuerto" de "retraso menor").
+        \item \textbf{Sistema de Alertas de Desviación:} Implementar un monitor que compare el tráfico real vs predicho en ventanas de 4 horas; una divergencia sostenida $>20\%$ debería disparar alertas de ``Evento Anómal`` no capturado por el modelo base.
+        \item \textbf{Refinamiento de Noticias con LLMs:} Sustituir la clasificación léxica actual por Modelos de Lenguaje (LLMs) capaces de evaluar semánticamente la gravedad de una noticia (e.g., distinguir ``cierre de aeropuerto`` de ``retraso menor``).
     \end{enumerate}
 
 \bibliographystyle{ieeetr}
