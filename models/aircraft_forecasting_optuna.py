@@ -29,6 +29,7 @@ from models import (
     ProphetModel,
     RandomForestModel,
     LSTMModel,
+    XGBoostModel,
     EnsembleModel,
     AircraftForecaster
 )
@@ -96,7 +97,7 @@ def objective(trial, X, y):
         Error de validación (MAE) a minimizar
     """
     # Selección del modelo
-    algorithm = trial.suggest_categorical('algorithm', ['random_forest', 'prophet', 'lstm', 'arima'])
+    algorithm = trial.suggest_categorical('algorithm', ['random_forest', 'prophet', 'lstm', 'arima', 'xgboost'])
 
     # Crear una copia de la configuración
     trial_config = ModelConfig()
@@ -161,6 +162,24 @@ def objective(trial, X, y):
         }
         
         model = ARIMAModel(trial_config)
+    
+    elif algorithm == 'xgboost':
+        # Espacio de búsqueda para XGBoost
+        trial_config.models['xgboost'] = {
+            'n_estimators': trial.suggest_int('xgb_n_estimators', 50, 500, step=50),
+            'max_depth': trial.suggest_int('xgb_max_depth', 3, 15),
+            'learning_rate': trial.suggest_float('xgb_learning_rate', 0.01, 0.3, log=True),
+            'subsample': trial.suggest_float('xgb_subsample', 0.6, 1.0),
+            'colsample_bytree': trial.suggest_float('xgb_colsample_bytree', 0.6, 1.0),
+            'min_child_weight': trial.suggest_int('xgb_min_child_weight', 1, 10),
+            'gamma': trial.suggest_float('xgb_gamma', 0, 5),
+            'reg_alpha': trial.suggest_float('xgb_reg_alpha', 0, 1),
+            'reg_lambda': trial.suggest_float('xgb_reg_lambda', 0, 1),
+            'random_state': RANDOM_STATE,
+            'n_jobs': -1
+        }
+        
+        model = XGBoostModel(trial_config)
     
     else:
         raise ValueError(f"Tipo de modelo no soportado: {algorithm}")

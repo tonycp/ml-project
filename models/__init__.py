@@ -29,7 +29,8 @@ from .model import (
     RandomForestModel,
     LSTMModel,
     EnsembleModel,
-    AircraftForecaster
+    AircraftForecaster,
+    XGBoostModel
 )
 
 __all__ = [
@@ -54,5 +55,6 @@ __all__ = [
     'RandomForestModel',
     'LSTMModel',
     'EnsembleModel',
+    'XGBoostModel'
     'AircraftForecaster'
 ]

@@ -735,6 +735,120 @@ class AircraftForecaster:
         self.models[model.name] = model
         self.logger.info(f"Modelo {model.name} añadido")
 
+    def generate_learning_curve(self, model_name: str, X: pd.DataFrame, y: pd.Series, train_sizes: np.ndarray = None) -> Dict:
+        """
+        Genera curva de aprendizaje para un modelo específico.
+        
+        Args:
+            model_name: Nombre del modelo a evaluar
+            X: Features
+            y: Target
+            train_sizes: Array de tamaños de entrenamiento (fracciones de 0.1 a 1.0)
+            
+        Returns:
+            Diccionario con datos de la curva de aprendizaje
+        """
+        from sklearn.model_selection import learning_curve
+        from sklearn.metrics import mean_absolute_error, make_scorer
+        
+        if train_sizes is None:
+            train_sizes = np.linspace(0.1, 1.0, 10)
+        
+        if model_name not in self.models:
+            raise ValueError(f"Modelo {model_name} no encontrado")
+        
+        model = self.models[model_name]
+        
+        # Para modelos que no son scikit-learn, necesitamos un enfoque diferente
+        if hasattr(model, 'model') and hasattr(model.model, 'fit'):
+            # Es un modelo scikit-learn compatible
+            try:
+                # Crear scorer personalizado para MAE
+                mae_scorer = make_scorer(mean_absolute_error, greater_is_better=False)
+                
+                # Generar curva de aprendizaje
+                train_sizes_abs, train_scores, val_scores = learning_curve(
+                    model.model, X, y,
+                    train_sizes=train_sizes,
+                    cv=3,  # 3-fold cross-validation
+                    scoring=mae_scorer,
+                    n_jobs=-1,
+                    random_state=42
+                )
+                
+                # Convertir scores negativos (por el scorer) a positivos
+                train_scores = np.abs(train_scores)
+                val_scores = np.abs(val_scores)
+                
+                return {
+                    'train_sizes': train_sizes_abs,
+                    'train_scores_mean': np.mean(train_scores, axis=1),
+                    'train_scores_std': np.std(train_scores, axis=1),
+                    'val_scores_mean': np.mean(val_scores, axis=1),
+                    'val_scores_std': np.std(val_scores, axis=1)
+                }
+                
+            except Exception as e:
+                self.logger.warning(f"No se pudo generar curva de aprendizaje automática para {model_name}: {e}")
+        
+        # Método manual para modelos no compatibles
+        return self._generate_manual_learning_curve(model_name, X, y, train_sizes)
+    
+    def _generate_manual_learning_curve(self, model_name: str, X: pd.DataFrame, y: pd.Series, train_sizes: np.ndarray) -> Dict:
+        """
+        Genera curva de aprendizaje manualmente para modelos no scikit-learn.
+        """
+        from sklearn.model_selection import train_test_split
+        
+        train_scores = []
+        val_scores = []
+        train_sizes_abs = []
+        
+        # Dividir datos en entrenamiento y validación
+        X_temp, X_val, y_temp, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        for train_size in train_sizes:
+            # Calcular tamaño absoluto del conjunto de entrenamiento
+            n_samples = int(len(X_temp) * train_size)
+            train_sizes_abs.append(n_samples)
+            
+            # Tomar subconjunto de entrenamiento
+            X_train = X_temp[:n_samples]
+            y_train = y_temp[:n_samples]
+            
+            try:
+                # Crear una nueva instancia del modelo para cada tamaño
+                model_class = type(self.models[model_name])
+                model_instance = model_class(self.models[model_name].config)
+                
+                # Entrenar con el subconjunto
+                model_instance.fit(X_train, y_train)
+                
+                # Predecir en entrenamiento y validación
+                train_pred = model_instance.predict(X_train)
+                val_pred = model_instance.predict(X_val)
+                
+                # Calcular MAE
+                train_mae = mean_absolute_error(y_train, train_pred)
+                val_mae = mean_absolute_error(y_val, val_pred)
+                
+                train_scores.append(train_mae)
+                val_scores.append(val_mae)
+                
+            except Exception as e:
+                self.logger.warning(f"Error en curva de aprendizaje para tamaño {train_size}: {e}")
+                # Usar valores altos si falla
+                train_scores.append(float('inf'))
+                val_scores.append(float('inf'))
+        
+        return {
+            'train_sizes': np.array(train_sizes_abs),
+            'train_scores_mean': np.array(train_scores),
+            'train_scores_std': np.zeros_like(train_scores),  # No hay variabilidad en una sola ejecución
+            'val_scores_mean': np.array(val_scores),
+            'val_scores_std': np.zeros_like(val_scores)
+        }
+
     def train_all_models(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, Dict]:
         """
         Entrena todos los modelos y retorna métricas.

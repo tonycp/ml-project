@@ -4,6 +4,11 @@ import pandas as pd
 import numpy as np
 from matplotlib.patches import Rectangle
 import seaborn as sns
+import json
+import argparse
+from pathlib import Path
+from sklearn.metrics import mean_absolute_error
+from matplotlib.ticker import FuncFormatter
 
 # Configuración de estilo para los gráficos
 plt.style.use('seaborn-v0_8')
@@ -16,7 +21,7 @@ def parse_train_results(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         content = file.read()
     
-    # Dividir el contenido por configuraciones
+    # Dividir el contenido por configuraciones 
     sections = content.split('=' * 60)
     
     results = []
@@ -73,23 +78,23 @@ def shorten_config_names(configs):
     """
     config_map = {
         'BASELINE': 'BASELINE',
-        'AEROLINEAS (OneHot=False)': 'AERO(NoOH)',
-        'AEROLINEAS (OneHot=True)': 'AERO(OH)',
-        'NEWS (OneHot)': 'NEWS(OH)',
-        'NEWS (Aggregated)': 'NEWS(Agg)',
+        'AEROLINEAS(OneHot=False)': 'AERO(NoOH)',
+        'AEROLINEAS(OneHot=True)': 'AERO(OH)',
+        'NEWS(OneHot)': 'NEWS(OH)',
+        'NEWS(Aggregated)': 'NEWS(Agg)',
         'WEATHER': 'WEATHER',
-        'WEATHER y AEROLINEAS (OneHot=False)': 'W+AERO(NoOH)',
-        'WEATHER y AEROLINEAS (OneHot=True)': 'W+AERO(OH)',
-        'WEATHER y NEWS (OneHot)': 'W+NEWS(OH)',
-        'WEATHER y NEWS (Aggregated)': 'W+NEWS(Agg)',
-        'AEROLINEAS (OneHot=False) y NEWS (OneHot)': 'AERO(NoOH)+NEWS(OH)',
-        'AEROLINEAS (OneHot=True) y NEWS (OneHot)': 'AERO(OH)+NEWS(OH)',
-        'AEROLINEAS (OneHot=False) y NEWS (Aggregated)': 'AERO(NoOH)+NEWS(Agg)',
-        'AEROLINEAS (OneHot=True) y NEWS (Aggregated)': 'AERO(OH)+NEWS(Agg)',
-        'WEATHER y AEROLINEAS (OneHot=False) y NEWS (OneHot)': 'W+AERO(NoOH)+NEWS(OH)',
-        'WEATHER y AEROLINEAS (OneHot=True) y NEWS (OneHot)': 'W+AERO(OH)+NEWS(OH)',
-        'WEATHER y AEROLINEAS (OneHot=False) y NEWS (Aggregated)': 'W+AERO(NoOH)+NEWS(Agg)',
-        'WEATHER y AEROLINEAS (OneHot=True) y NEWS (Aggregated)': 'W+AERO(OH)+NEWS(Agg)'
+        'AEROLINEAS(OneHot=False) y WEATHER': 'W+AERO(NoOH)',
+        'AEROLINEAS(OneHot=True) y WEATHER': 'W+AERO(OH)',
+        'NEWS(OneHot) y WEATHER': 'W+NEWS(OH)',
+        'NEWS(Aggregated) y WEATHER': 'W+NEWS(Agg)',
+        'AEROLINEAS(OneHot=False) y NEWS(OneHot)': 'AERO(NoOH)+NEWS(OH)',
+        'AEROLINEAS(OneHot=True) y NEWS(OneHot)': 'AERO(OH)+NEWS(OH)',
+        'AEROLINEAS(OneHot=False) y NEWS(Aggregated)': 'AERO(NoOH)+NEWS(Agg)',
+        'AEROLINEAS(OneHot=True) y NEWS(Aggregated)': 'AERO(OH)+NEWS(Agg)',
+        'AEROLINEAS(OneHot=False) y NEWS(OneHot) y WEATHER': 'W+AERO(NoOH)+NEWS(OH)',
+        'AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER': 'W+AERO(OH)+NEWS(OH)',
+        'AEROLINEAS(OneHot=False) y NEWS(Aggregated) y WEATHER': 'W+AERO(NoOH)+NEWS(Agg)',
+        'AEROLINEAS(OneHot=True) y NEWS(Aggregated) y WEATHER': 'W+AERO(OH)+NEWS(Agg)'
     }
     
     # Para cualquier configuración no mapeada, crear un nombre corto
@@ -114,10 +119,10 @@ def create_heatmaps(df):
     fig, axes = plt.subplots(1, 3, figsize=(20, 8))
     fig.suptitle('Heatmaps de Métricas por Modelo y Configuración', fontsize=16, fontweight='bold')
     
-    # Pivot tables para cada métrica
-    pivot_mae = df.pivot_table(values='mae', index='config_short', columns='model', aggfunc='mean')
-    pivot_rmse = df.pivot_table(values='rmse', index='config_short', columns='model', aggfunc='mean')
-    pivot_r2 = df.pivot_table(values='r2', index='config_short', columns='model', aggfunc='mean')
+    # Pivot tables para cada métrica - asegurarse de incluir todas las configuraciones
+    pivot_mae = df.pivot_table(values='mae', index='config_short', columns='model', aggfunc='mean', fill_value=np.nan)
+    pivot_rmse = df.pivot_table(values='rmse', index='config_short', columns='model', aggfunc='mean', fill_value=np.nan)
+    pivot_r2 = df.pivot_table(values='r2', index='config_short', columns='model', aggfunc='mean', fill_value=np.nan)
     
     # Heatmap MAE - colores más diferenciados
     sns.heatmap(pivot_mae, annot=True, fmt='.1f', cmap='RdYlBu_r', ax=axes[0], 
@@ -145,13 +150,22 @@ def create_heatmaps(df):
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
         plt.setp(ax.get_yticklabels(), rotation=0)
     
-    # Añadir leyenda de configuraciones
+    # Añadir leyenda útil de configuraciones
     legend_text = "Leyenda de Configuraciones:\n" + "\n".join([f"{short}: {long}" for long, short in config_map.items() if long in df['config'].unique()])
     fig.text(0.02, 0.02, legend_text, fontsize=8, verticalalignment='bottom', 
              bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.8))
+  
+    plt.tight_layout(rect=[0, 0.20, 1, 0.95])
     
-    plt.tight_layout(rect=[0, 0.25, 1, 0.95])
+    # Guardar el gráfico
+    import os
+    os.makedirs('train_results', exist_ok=True)
+    plt.savefig('train_results/heatmaps_metrics.png', dpi=300, bbox_inches='tight')
+    print("📊 Heatmaps guardados en: train_results/heatmaps_metrics.png")
+    
     return fig
+
+
 
 def create_combined_plots(df):
     """
@@ -241,66 +255,282 @@ def create_combined_plots(df):
     
     # Sin texto sobre las barras como solicitaste
     
-    # Añadir leyenda de configuraciones
-    legend_text = "Leyenda de Configuraciones:\n" + "\n".join([f"{short}: {long}" for long, short in config_map.items() if long in df['config'].unique()])
-    fig.text(0.02, 0.02, legend_text, fontsize=7, verticalalignment='bottom', 
-             bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.8))
+    # Añadir leyenda útil de configuraciones
+    if len(config_map) > 1:  # Solo si hay múltiples configuraciones
+        legend_text = "Configuraciones:\n" + "\n".join([f"• {short}: {long}" for long, short in config_map.items() if long in df['config'].unique()])
+        fig.text(0.02, 0.02, legend_text, fontsize=6, verticalalignment='bottom', 
+                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.9))
+        print("📋 Leyenda de configuraciones añadida para facilitar lectura")
     
     plt.tight_layout(rect=[0, 0.20, 1, 0.95])
+
+    plt.savefig('train_results/combined_analysis.png', dpi=300, bbox_inches='tight')
+    print("📊 Gráficos combinados guardados en: train_results/combined_analysis.png")
+    
     return fig
 
+def create_learning_curve_plot(json_file_path):
+    """
+    Crea una visualización de la curva de aprendizaje del mejor modelo usando datos reales.
+    
+    Args:
+        json_file_path: Ruta al archivo JSON con resultados
+    """
+    try:
+        # Cargar resultados
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            all_results = json.load(f)
+        
+        # Filtrar resultados exitosos y encontrar el mejor modelo
+        successful_results = [r for r in all_results if r.get('best_model') != 'ERROR' and r.get('learning_curve') is not None]
+        
+        if not successful_results:
+            print("❌ No hay resultados exitosos con curvas de aprendizaje para mostrar")
+            return
+        
+        # Encontrar la mejor configuración (menor MAE)
+        best_result = min(successful_results, key=lambda x: x['best_mae'])
+        best_config = best_result['config']
+        best_model_name = best_result['best_model']
+        learning_curve_data = best_result['learning_curve']
+        
+        print(f"📈 Creando curva de aprendizaje real para el mejor modelo:")
+        print(f"   Modelo: {best_model_name}")
+        print(f"   Configuración: {best_config}")
+        print(f"   MAE: {best_result['best_mae']:.2f}")
+        
+        # Crear figura para la curva de aprendizaje
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        
+        # Extraer datos reales de la curva de aprendizaje
+        # Convertir strings a arrays si es necesario
+        train_sizes_str = learning_curve_data['train_sizes']
+        train_scores_mean_str = learning_curve_data['train_scores_mean']
+        train_scores_std_str = learning_curve_data['train_scores_std']
+        val_scores_mean_str = learning_curve_data['val_scores_mean']
+        val_scores_std_str = learning_curve_data['val_scores_std']
+        
+        # Convertir a arrays numéricos
+        if isinstance(train_sizes_str, str):
+            train_sizes = np.array([float(x) for x in train_sizes_str.strip('[]').split()])
+            train_scores_mean = np.array([float(x) for x in train_scores_mean_str.strip('[]').split()])
+            train_scores_std = np.array([float(x) for x in train_scores_std_str.strip('[]').split()])
+            val_scores_mean = np.array([float(x) for x in val_scores_mean_str.strip('[]').split()])
+            val_scores_std = np.array([float(x) for x in val_scores_std_str.strip('[]').split()])
+        else:
+            train_sizes = np.array(learning_curve_data['train_sizes'])
+            train_scores_mean = np.array(learning_curve_data['train_scores_mean'])
+            train_scores_std = np.array(learning_curve_data['train_scores_std'])
+            val_scores_mean = np.array(learning_curve_data['val_scores_mean'])
+            val_scores_std = np.array(learning_curve_data['val_scores_std'])
+        
+        # Graficar curvas con datos reales
+        ax.plot(train_sizes, train_scores_mean, 'o-', color='#1f77b4', linewidth=2, markersize=6, label='MAE Entrenamiento')
+        ax.fill_between(train_sizes, 
+                        train_scores_mean - train_scores_std,
+                        train_scores_mean + train_scores_std,
+                        alpha=0.2, color='#1f77b4')
+        
+        ax.plot(train_sizes, val_scores_mean, 's-', color='#ff7f0e', linewidth=2, markersize=6, label='MAE Validación')
+        ax.fill_between(train_sizes,
+                        val_scores_mean - val_scores_std,
+                        val_scores_mean + val_scores_std,
+                        alpha=0.2, color='#ff7f0e')
+        
+        # Añadir etiquetas con valores exactos en puntos clave
+        for i, (x, y_train, y_val) in enumerate(zip(train_sizes[::2], train_scores_mean[::2], val_scores_mean[::2])):
+            ax.annotate(f'{y_train:.1f}', (x, y_train), textcoords="offset points", 
+                       xytext=(0,10), ha='center', fontsize=8, color='#1f77b4')
+            ax.annotate(f'{y_val:.1f}', (x, y_val), textcoords="offset points", 
+                       xytext=(0,-15), ha='center', fontsize=8, color='#ff7f0e')
+        
+        # Línea horizontal para el mejor MAE alcanzado
+        final_mae = best_result['best_mae']
+        ax.axhline(y=final_mae, color='red', linestyle='--', alpha=0.7, label=f'Mejor MAE: {final_mae:.2f}')
+        
+        # Configurar el gráfico
+        ax.set_xlabel('Tamaño del conjunto de entrenamiento', fontsize=12, fontweight='bold')
+        ax.set_ylabel('MAE', fontsize=12, fontweight='bold')
+        ax.set_title(f'Curva de Aprendizaje Real - Mejor Modelo\n{best_model_name.upper()} ({best_config})', 
+                    fontsize=14, fontweight='bold', pad=20)
+        
+        ax.set_yscale('log')
+        
+        # Configurar más marcas en el eje Y para mejor legibilidad
+        y_min = min(np.min(train_scores_mean), np.min(val_scores_mean)) * 0.8
+        y_max = max(np.max(train_scores_mean), np.max(val_scores_mean)) * 1.2
+        
+        # Crear marcas más densas en el eje Y
+        y_ticks = np.logspace(np.log10(y_min), np.log10(y_max), 10)
+        ax.set_yticks(y_ticks)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda y, _: f"{y:.0f}" if y >= 1 else f"{y:.1f}"))
+        ax.grid(True, alpha=0.3, which='both')
+        ax.legend(fontsize=11, loc='upper right')
+        
+        # Añadir anotaciones importantes
+        ax.annotate(f'Mejor rendimiento\nMAE: {final_mae:.2f}', 
+                   xy=(train_sizes[-1], final_mae), xytext=(train_sizes[-1]*0.7, final_mae * 1.5),
+                   arrowprops=dict(arrowstyle='->', color='red', alpha=0.7),
+                   fontsize=10, ha='center',
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
+        
+        # Añadir información sobre el sobreajuste
+        final_train_mae = train_scores_mean[-1]
+        final_val_mae = val_scores_mean[-1]
+        
+        # Asegurarse de que los valores sean numéricos
+        try:
+            final_train_mae = float(final_train_mae)
+            final_val_mae = float(final_val_mae)
+            overfitting_ratio = final_val_mae / final_train_mae if final_train_mae > 0 else float('inf')
+        except (ValueError, TypeError):
+            print("⚠️ No se pudo calcular el ratio de sobreajuste")
+            overfitting_ratio = 1.0
+        
+        ax.text(0.02, 0.98, f'Ratio Validación/Entrenamiento: {overfitting_ratio:.2f}', 
+               transform=ax.transAxes, fontsize=10,
+               verticalalignment='top',
+               bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen" if overfitting_ratio < 1.2 else "lightyellow", alpha=0.8))
+        
+        plt.tight_layout()
+        
+        # Guardar el gráfico
+        output_file = 'train_results/learning_curve_best_model.png'
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"📈 Curva de aprendizaje real guardada en: {output_file}")
+        
+        plt.show()
+        
+    except Exception as e:
+        print(f"❌ Error creando curva de aprendizaje: {e}")
+
+
+def load_and_visualize_json_results(json_file_path):
+    """
+    Carga resultados desde un archivo JSON y genera visualizaciones.
+    
+    Args:
+        json_file_path: Ruta al archivo JSON con resultados
+    """
+    try:
+        # Cargar resultados
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            all_results = json.load(f)
+        
+        print(f" Resultados cargados desde: {json_file_path}")
+        print(f" Total de configuraciones: {len(all_results)}")
+        
+        # Filtrar resultados exitosos
+        successful_results = [r for r in all_results if r.get('best_model') != 'ERROR']
+        print(f" Configuraciones exitosas: {len(successful_results)}")
+        
+        # Extraer todos los resultados individuales de modelos
+        formatted_results = []
+        model_names = set()
+        
+        for result in successful_results:
+            config = result['config']
+            all_models = result.get('all_results', {})
+            
+            for model_name, model_data in all_models.items():
+                if model_data.get('success', False):
+                    metrics = model_data.get('metrics', {})
+                    formatted_results.append({
+                        'config': config,
+                        'model': model_name,
+                        'mae': metrics.get('mae', 0),
+                        'rmse': metrics.get('rmse', 0),
+                        'r2': metrics.get('r2', 0)
+                    })
+                    model_names.add(model_name)
+        
+        print(f" Modelos encontrados: {', '.join(sorted(model_names))}")
+        
+        if not formatted_results:
+            print(" No hay resultados para visualizar")
+            return
+        
+        # Convertir a DataFrame
+        df_results = pd.DataFrame(formatted_results)
+        
+        print(f" Total de resultados: {len(df_results)}")
+        print(f"  Configuraciones: {df_results['config'].nunique()}")
+        print(f" Modelos: {df_results['model'].nunique()}")
+        
+        # Generar visualizaciones usando las funciones existentes
+        print("\n Generando visualizaciones...")
+        
+        # Asegurar que el directorio exista
+        import os
+        os.makedirs('train_results', exist_ok=True)
+        
+        # Crear heatmaps
+        create_heatmaps(df_results)
+        
+        # Crear gráficos combinados
+        create_combined_plots(df_results)
+        
+        # Crear curva de aprendizaje del mejor modelo
+        create_learning_curve_plot(json_file_path)
+        
+        print(f"\n✅ Visualizaciones completadas para: {json_file_path}")
+        
+    except FileNotFoundError:
+        print(f"❌ Error: Archivo no encontrado: {json_file_path}")
+    except json.JSONDecodeError:
+        print(f"❌ Error: El archivo {json_file_path} no contiene JSON válido")
+    except Exception as e:
+        print(f"❌ Error procesando resultados: {e}")
+
+
 def main():
-    """
-    Función principal para generar todas las visualizaciones.
-    """
-    print("🔍 Analizando resultados del entrenamiento...")
+    """Función principal con opciones para visualizar resultados."""
+    parser = argparse.ArgumentParser(description="Visualización de resultados de entrenamiento")
+    parser.add_argument("--train-file", type=str, default="train.txt",
+                       help="Archivo de texto con resultados de entrenamiento (default: train.txt)")
+    parser.add_argument("--json-file", type=str,
+                       help="Archivo JSON con resultados del entrenamiento comprehensivo")
     
-    # Parsear resultados
-    df = parse_train_results('train.txt')
+    args = parser.parse_args()
     
-    if df.empty:
-        print("❌ No se encontraron resultados en el archivo train.txt")
-        return
+    if args.json_file:
+        # Visualizar desde archivo JSON
+        load_and_visualize_json_results(args.json_file)
+    else:
+        load_and_visualize_json_results("models/train_results/comprehensive_training_results.json")
+
+    # else:
+    #     # Visualizar desde archivo de texto (funcionalidad original)
+    #     try:
+    #         results = parse_train_results(args.train_file)
+            
+    #         if not results:
+    #             print("No se encontraron resultados válidos en el archivo.")
+    #             return
+            
+    #         print(f"Se encontraron {len(results)} resultados válidos.")
+            
+    #         # Crear visualizaciones
+    #         print("📈 Generando heatmaps de métricas...")
+    #         fig1 = create_heatmaps(results)
+    #         fig1.savefig('train_results/heatmaps_metrics.png', dpi=300, bbox_inches='tight')
+            
+    #         print("📊 Generando gráficos combinados...")
+    #         fig2 = create_combined_plots(results)
+    #         fig2.savefig('train_results/combined_analysis.png', dpi=300, bbox_inches='tight')
+
+            
+    #         print("\nVisualizaciones guardadas:")
+    #         print(f"   - heatmaps_metrics.png (MAE, RMSE, R²)")
+    #         print(f"   - combined_analysis.png (4 gráficos combinados)")
+            
+    #     except FileNotFoundError:
+    #         print(f"Error: No se encontró el archivo '{args.train_file}'")
+    #     except Exception as e:
+    #         print(f"Error procesando el archivo: {e}")
     
-    print(f"✅ Se encontraron {len(df)} resultados")
-    print(f"📊 Modelos: {', '.join(df['model'].unique())}")
-    print(f"⚙️  Configuraciones: {len(df['config'].unique())}")
-    
-    # Crear gráficos
-    print("📈 Generando heatmaps de métricas...")
-    fig1 = create_heatmaps(df)
-    fig1.savefig('heatmaps_metrics.png', dpi=300, bbox_inches='tight')
-    
-    print("📊 Generando gráficos combinados...")
-    fig2 = create_combined_plots(df)
-    fig2.savefig('combined_analysis.png', dpi=300, bbox_inches='tight')
-    
-    # Estadísticas resumen
-    print("\n📋 RESUMEN DE RESULTADOS:")
-    print("=" * 50)
-    
-    # Mejor modelo general
-    best_overall = df.loc[df['mae'].idxmin()]
-    print(f"🏆 Mejor modelo general: {best_overall['model']} (MAE: {best_overall['mae']:.2f})")
-    print(f"   Configuración: {best_overall['config']}")
-    
-    # Mejor modelo por tipo
-    print("\n🎯 Mejores modelos por tipo:")
-    for model in df['model'].unique():
-        best_model = df[df['model'] == model].loc[df[df['model'] == model]['mae'].idxmin()]
-        print(f"   {model}: MAE {best_model['mae']:.2f} ({best_model['config']})")
-    
-    # Configuración con mejor rendimiento
-    best_config = df.groupby('config')['mae'].mean().idxmin()
-    best_config_mae = df.groupby('config')['mae'].mean().min()
-    print(f"\n⚙️  Mejor configuración: {best_config}")
-    print(f"   MAE promedio: {best_config_mae:.2f}")
-    
-    print(f"\n💾 Gráficos guardados:")
-    print(f"   - heatmaps_metrics.png (MAE, RMSE, R²)")
-    print(f"   - combined_analysis.png (4 gráficos combinados)")
-    
-    plt.show()
+    # plt.show()
+
 
 if __name__ == "__main__":
     main()
