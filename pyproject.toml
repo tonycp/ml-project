@@ -7,7 +7,7 @@ name = "event-extractor"
 version = "0.1.0"
 description = "Librería para extracción de eventos de noticias en español"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.8.1"
 license = {text = "MIT"}
 authors = [
     {name = "Tu Nombre", email = "tu.email@example.com"}
