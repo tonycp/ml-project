@@ -38,10 +38,13 @@ class WeatherDataLoader:
             ]
         })
 
+        # Ruta al archivo de datos meteorológicos reales
+        self.meteorological_file = config.data_dir / config.meteorological_data_file
+
     def load_weather_data(self, start_date: Optional[str] = None,
-                         end_date: Optional[str] = None) -> pd.DataFrame:
+                         end_date: Optional[str] = None, use_median = False) -> pd.DataFrame:
         """
-        Carga datos meteorológicos históricos.
+        Carga datos meteorológicos históricos desde el archivo real.
 
         Args:
             start_date: Fecha de inicio (opcional)
@@ -50,72 +53,146 @@ class WeatherDataLoader:
         Returns:
             DataFrame con datos meteorológicos diarios
         """
-        self.logger.info("Cargando datos meteorológicos...")
+        self.logger.info(f"Cargando datos meteorológicos desde: {self.meteorological_file}")
 
-        # Por ahora, crear datos sintéticos representativos del clima cubano
-        # En producción, esto se conectaría a APIs como OpenWeatherMap, NOAA, etc.
+        if not self.meteorological_file.exists():
+            self.logger.warning(f"Archivo meteorológico no encontrado: {self.meteorological_file}")
+            self.logger.info("Generando datos sintéticos como fallback...")
+            return self._generate_synthetic_weather_data(start_date, end_date)
 
+        try:
+            # Cargar datos reales
+            df = pd.read_csv(self.meteorological_file)
+            
+            # Procesar fechas
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.set_index('date').sort_index()
+
+            # Mapear columnas del archivo real a nombres estándar (usando las columnas _mean)
+            # Se podría configurar para usar _median si se prefiere
+            suffix = '_median' if use_median else '_mean'
+            
+            column_mapping = {
+                f'ff_Velocidad del Viento{suffix}': 'wind_speed',
+                f'dd_Dirección del Viento{suffix}': 'wind_direction', 
+                f'T_Temperatura del Aire{suffix}': 'temperature',
+                f'HR_Humedad Relativa del Aire{suffix}': 'humidity',
+                f'P_Presión Atmosférica{suffix}': 'pressure',
+                f'R_Precipitación Acumulada{suffix}': 'precipitation',
+                f'S_Radiación Solar Global{suffix}': 'solar_radiation'
+            }
+            
+            # Verificar que todas las columnas existan
+            missing_columns = [col for col in column_mapping.keys() if col not in df.columns]
+            if missing_columns:
+                self.logger.warning(f"Columnas faltantes con {suffix}: {missing_columns}")
+                # Intentar con el otro sufijo
+                fallback_suffix = '_mean' if use_median else '_median'
+                fallback_mapping = {
+                    f'ff_Velocidad del Viento{fallback_suffix}': 'wind_speed',
+                    f'dd_Dirección del Viento{fallback_suffix}': 'wind_direction', 
+                    f'T_Temperatura del Aire{fallback_suffix}': 'temperature',
+                    f'HR_Humedad Relativa del Aire{fallback_suffix}': 'humidity',
+                    f'P_Presión Atmosférica{fallback_suffix}': 'pressure',
+                    f'R_Precipitación Acumulada{fallback_suffix}': 'precipitation',
+                    f'S_Radiación Solar Global{fallback_suffix}': 'solar_radiation'
+                }
+                missing_fallback = [col for col in fallback_mapping.keys() if col not in df.columns]
+                if missing_fallback:
+                    raise ValueError(f"Columnas faltantes en el archivo: {missing_columns} y {missing_fallback}")
+                column_mapping = fallback_mapping
+                self.logger.info(f"Usando columnas {fallback_suffix} como fallback")
+            
+            # Crear DataFrame con nombres estándar
+            weather_df = df[list(column_mapping.keys())].copy()
+            weather_df.columns = list(column_mapping.values())
+            
+            # Ajustar unidades y escalas
+            weather_df['wind_speed'] = weather_df['wind_speed']  # ya está en m/s
+            weather_df['temperature'] = weather_df['temperature']  # ya está en °C
+            weather_df['humidity'] = weather_df['humidity']  # ya está en %
+            weather_df['pressure'] = weather_df['pressure']  # mantener en hPa (unidades estándar)
+            weather_df['precipitation'] = weather_df['precipitation']  # ya está en mm
+            
+            # Generar variables adicionales basadas en los datos reales
+            weather_df = self._add_derived_weather_variables(weather_df)
+            
+            # Filtrar por rango de fechas si se especifica
+            if start_date:
+                weather_df = weather_df[weather_df.index >= start_date]
+            if end_date:
+                weather_df = weather_df[weather_df.index <= end_date]
+
+            self.logger.info(f"Datos meteorológicos cargados: {len(weather_df)} registros")
+            return weather_df
+
+        except Exception as e:
+            self.logger.error(f"Error cargando datos meteorológicos: {e}")
+            self.logger.info("Generando datos sintéticos como fallback...")
+            return self._generate_synthetic_weather_data(start_date, end_date)
+
+    def _generate_synthetic_weather_data(self, start_date: Optional[str] = None,
+                                       end_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        Genera datos sintéticos como fallback cuando no hay datos reales.
+        """
         if start_date and end_date:
             date_range = pd.date_range(start=start_date, end=end_date, freq='D')
         else:
-            # Usar rango por defecto
             date_range = pd.date_range(start='2022-01-01', end='2025-12-31', freq='D')
 
-        # Generar datos sintéticos representativos del clima cubano
-        np.random.seed(42)  # Para reproducibilidad
-
+        np.random.seed(42)
         weather_data = []
 
         for date in date_range:
-            # Temperatura: 20-32°C (más cálido en verano)
             base_temp = 26 + 3 * np.sin(2 * np.pi * date.dayofyear / 365)
             temperature = base_temp + np.random.normal(0, 2)
-
-            # Humedad: 60-90%
             humidity = 75 + 10 * np.sin(2 * np.pi * date.dayofyear / 365) + np.random.normal(0, 5)
-
-            # Velocidad del viento: 5-25 km/h
             wind_speed = 15 + 5 * np.random.normal(0, 1)
-
-            # Dirección del viento (grados)
             wind_direction = np.random.uniform(0, 360)
-
-            # Precipitación: 0-50mm/día (más en temporada de lluvias)
-            rainfall_season = 1 if 5 <= date.month <= 10 else 0.3  # Mayo-Octubre: temporada de lluvias
+            rainfall_season = 1 if 5 <= date.month <= 10 else 0.3
             precipitation = np.random.exponential(2) * rainfall_season if np.random.random() < 0.3 else 0
-
-            # Visibilidad: 5-15 km (reducida con lluvia)
-            base_visibility = 12
-            visibility = base_visibility * (0.5 if precipitation > 10 else 1) + np.random.normal(0, 1)
-
-            # Cobertura de nubes: 0-100%
-            cloud_cover = 40 + 30 * np.sin(2 * np.pi * date.dayofyear / 365) + np.random.normal(0, 10)
-
-            # Presión atmosférica: 1010-1020 hPa
             pressure = 1015 + np.random.normal(0, 3)
-
-            # Condiciones extremas (basado en datos históricos cubanos)
-            extreme_weather = self._generate_extreme_weather(date)
 
             weather_data.append({
                 'date': date,
-                'temperature': max(15, min(35, temperature)),  # Límites realistas
+                'temperature': max(15, min(35, temperature)),
                 'humidity': max(30, min(95, humidity)),
                 'wind_speed': max(0, wind_speed),
                 'wind_direction': wind_direction,
                 'precipitation': max(0, precipitation),
-                'visibility': max(1, visibility),
-                'cloud_cover': max(0, min(100, cloud_cover)),
                 'pressure': pressure,
-                **extreme_weather
+                'solar_radiation': 200 + np.random.normal(0, 50)
             })
 
         df = pd.DataFrame(weather_data)
         df['date'] = pd.to_datetime(df['date'])
         df = df.set_index('date').sort_index()
+        
+        return self._add_derived_weather_variables(df)
 
-        self.logger.info(f"Datos meteorológicos cargados: {len(df)} registros")
+    def _add_derived_weather_variables(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Agrega variables meteorológicas derivadas basadas en los datos reales.
+        """
 
+        # Indicadores de condiciones extremas basadas en umbrales reales
+        df['high_winds'] = (df['wind_speed'] > 8).astype(int)  # > 8 m/s = ~30 km/h
+        df['heavy_rain'] = (df['precipitation'] > 20).astype(int)  # > 20mm
+        df['extreme_heat'] = (df['temperature'] > 32).astype(int)  # > 32°C
+        df['extreme_cold'] = (df['temperature'] < 18).astype(int)  # < 18°C
+        
+        # Condiciones de tormenta basadas en combinación de factores
+        df['is_storm'] = ((df['high_winds'] == 1) | (df['heavy_rain'] == 1)).astype(int)
+        
+        # Índice de confort meteorológico (simplificado)
+        df['comfort_index'] = (
+            df['temperature'] * 0.4 + 
+            df['humidity'] * 0.3 + 
+            df['wind_speed'] * 0.2 + 
+            df['precipitation'] * 0.1
+        )
+        
         return df
 
     def _generate_extreme_weather(self, date: pd.Timestamp) -> Dict[str, int]:
@@ -163,7 +240,7 @@ class WeatherDataLoader:
 
     def get_weather_features_for_date(self, target_date: pd.Timestamp) -> Dict[str, float]:
         """
-        Obtiene features meteorológicos para una fecha específica.
+        Obtiene features meteorológicos para una fecha específica desde datos reales.
 
         Args:
             target_date: Fecha objetivo
@@ -171,9 +248,49 @@ class WeatherDataLoader:
         Returns:
             Diccionario con features meteorológicos
         """
-        # En producción, esto consultaría la base de datos/API
-        # Por ahora, devolver valores representativos
+        try:
+            # Cargar datos reales
+            weather_df = self.load_weather_data(
+                start_date=target_date.strftime('%Y-%m-%d'),
+                end_date=target_date.strftime('%Y-%m-%d')
+            )
+            
+            if weather_df.empty:
+                # Fallback a valores promedio si no hay datos para la fecha
+                return self._get_default_weather_features(target_date)
+            
+            # Obtener la fila correspondiente a la fecha objetivo
+            if target_date in weather_df.index:
+                row = weather_df.loc[target_date]
+                return {
+                    'temperature': float(row['temperature']),
+                    'humidity': float(row['humidity']),
+                    'wind_speed': float(row['wind_speed']),
+                    'wind_direction': float(row['wind_direction']),
+                    'precipitation': float(row['precipitation']),
+                    'pressure': float(row['pressure']),
+                    'visibility': float(row['visibility']),
+                    'cloud_cover': float(row['cloud_cover']),
+                    'solar_radiation': float(row.get('solar_radiation', 200)),
+                    'high_winds': int(row['high_winds']),
+                    'heavy_rain': int(row['heavy_rain']),
+                    'low_visibility': int(row['low_visibility']),
+                    'extreme_heat': int(row['extreme_heat']),
+                    'extreme_cold': int(row['extreme_cold']),
+                    'is_storm': int(row['is_storm']),
+                    'is_bad_weather': int(row['is_storm'] or row['heavy_rain'] or row['low_visibility'])
+                }
+            else:
+                return self._get_default_weather_features(target_date)
+                
+        except Exception as e:
+            self.logger.error(f"Error obteniendo features para fecha {target_date}: {e}")
+            return self._get_default_weather_features(target_date)
 
+    def _get_default_weather_features(self, target_date: pd.Timestamp) -> Dict[str, float]:
+        """
+        Retorna valores por defecto basados en patrones climáticos de Cuba.
+        """
         # Temperatura promedio por mes en La Habana
         monthly_temps = {
             1: 22, 2: 23, 3: 25, 4: 27, 5: 28, 6: 29, 7: 30, 8: 30, 9: 29, 10: 27, 11: 25, 12: 23
@@ -185,9 +302,19 @@ class WeatherDataLoader:
             'temperature': base_temp + np.random.normal(0, 2),
             'humidity': 70 + np.random.normal(0, 10),
             'wind_speed': 15 + np.random.normal(0, 5),
+            'wind_direction': np.random.uniform(0, 360),
             'precipitation': np.random.exponential(1) if np.random.random() < 0.2 else 0,
+            'pressure': 1015 + np.random.normal(0, 3),
             'visibility': 10 + np.random.normal(0, 2),
-            'is_bad_weather': 1 if np.random.random() < 0.1 else 0  # 10% de días con mal tiempo
+            'cloud_cover': 50 + np.random.normal(0, 20),
+            'solar_radiation': 200 + np.random.normal(0, 50),
+            'high_winds': 1 if np.random.random() < 0.05 else 0,
+            'heavy_rain': 1 if np.random.random() < 0.08 else 0,
+            'low_visibility': 1 if np.random.random() < 0.03 else 0,
+            'extreme_heat': 1 if np.random.random() < 0.02 else 0,
+            'extreme_cold': 1 if np.random.random() < 0.01 else 0,
+            'is_storm': 1 if np.random.random() < 0.02 else 0,
+            'is_bad_weather': 1 if np.random.random() < 0.1 else 0
         }
 
 

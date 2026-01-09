@@ -1,0 +1,310 @@
+================================================================================
+RESUMEN DE RESULTADOS DE ENTRENAMIENTO
+Generado: 2026-01-09 12:25:21
+================================================================================
+
+📊 ESTADÍSTICAS GENERALES
+----------------------------------------
+Total de resultados: 108
+Configuraciones evaluadas: 18
+Modelos evaluados: 6
+Modelos: arima, ensemble, lstm, prophet, random_forest, xgboost
+
+🏆 MEJOR MODELO GLOBAL
+----------------------------------------
+Modelo: xgboost
+Configuración: AEROLINEAS(OneHot=True) y NEWS(Aggregated)
+MAE: 121.8539
+RMSE: 178.5187
+R²: 0.3866
+
+🎯 MEJORES MODELOS POR CONFIGURACIÓN
+----------------------------------------
+AEROLINEAS(OneHot=True) y NEWS(Aggregated):
+  • Modelo: xgboost (MAE: 121.8539)
+  • RMSE: 178.5187, R²: 0.3866
+
+AEROLINEAS(OneHot=True) y NEWS(OneHot):
+  • Modelo: xgboost (MAE: 121.9678)
+  • RMSE: 178.8937, R²: 0.3825
+
+AEROLINEAS(OneHot=True) y WEATHER:
+  • Modelo: random_forest (MAE: 123.7920)
+  • RMSE: 168.4482, R²: 0.4614
+
+AEROLINEAS(OneHot=True):
+  • Modelo: xgboost (MAE: 124.1518)
+  • RMSE: 181.6469, R²: 0.3629
+
+AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER:
+  • Modelo: xgboost (MAE: 124.1899)
+  • RMSE: 177.6745, R²: 0.3998
+
+AEROLINEAS(OneHot=True) y NEWS(Aggregated) y WEATHER:
+  • Modelo: xgboost (MAE: 125.2595)
+  • RMSE: 178.6052, R²: 0.3900
+
+AEROLINEAS(OneHot=False) y NEWS(OneHot) y WEATHER:
+  • Modelo: random_forest (MAE: 133.2815)
+  • RMSE: 187.6779, R²: 0.3524
+
+AEROLINEAS(OneHot=False) y NEWS(Aggregated) y WEATHER:
+  • Modelo: random_forest (MAE: 133.9977)
+  • RMSE: 188.8067, R²: 0.3464
+
+AEROLINEAS(OneHot=False) y WEATHER:
+  • Modelo: random_forest (MAE: 134.9919)
+  • RMSE: 188.4594, R²: 0.3515
+
+NEWS(OneHot) y WEATHER:
+  • Modelo: random_forest (MAE: 138.5233)
+  • RMSE: 193.0137, R²: 0.3247
+
+WEATHER:
+  • Modelo: random_forest (MAE: 140.9383)
+  • RMSE: 194.9526, R²: 0.3133
+
+NEWS(Aggregated) y WEATHER:
+  • Modelo: random_forest (MAE: 141.8371)
+  • RMSE: 195.4163, R²: 0.3092
+
+AEROLINEAS(OneHot=False):
+  • Modelo: random_forest (MAE: 142.5562)
+  • RMSE: 194.4184, R²: 0.2865
+
+AEROLINEAS(OneHot=False) y NEWS(OneHot):
+  • Modelo: random_forest (MAE: 143.4189)
+  • RMSE: 196.0902, R²: 0.2796
+
+AEROLINEAS(OneHot=False) y NEWS(Aggregated):
+  • Modelo: random_forest (MAE: 145.3647)
+  • RMSE: 196.8660, R²: 0.2610
+
+NEWS(Aggregated):
+  • Modelo: random_forest (MAE: 148.3803)
+  • RMSE: 201.9776, R²: 0.2526
+
+NEWS(OneHot):
+  • Modelo: random_forest (MAE: 153.8416)
+  • RMSE: 207.2076, R²: 0.2116
+
+BASELINE:
+  • Modelo: random_forest (MAE: 155.1655)
+  • RMSE: 206.4675, R²: 0.2159
+
+🔧 MEJORES MODELOS POR TIPO
+----------------------------------------
+arima:
+  • Configuración: BASELINE
+  • MAE: 775.6513
+  • RMSE: 884.8894, R²: -12.4525
+
+ensemble:
+  • Configuración: NEWS(Aggregated)
+  • MAE: 204.3718
+  • RMSE: 255.9510, R²: -0.2064
+
+lstm:
+  • Configuración: AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER
+  • MAE: 238.1640
+  • RMSE: 339.2381, R²: -1.7485
+
+prophet:
+  • Configuración: BASELINE
+  • MAE: 330.3016
+  • RMSE: 380.8628, R²: -2.0586
+
+random_forest:
+  • Configuración: AEROLINEAS(OneHot=True) y WEATHER
+  • MAE: 123.7920
+  • RMSE: 168.4482, R²: 0.4614
+
+xgboost:
+  • Configuración: AEROLINEAS(OneHot=True) y NEWS(Aggregated)
+  • MAE: 121.8539
+  • RMSE: 178.5187, R²: 0.3866
+
+📈 ANÁLISIS POR CONFIGURACIÓN (PROMEDIOS)
+----------------------------------------
+AEROLINEAS(OneHot=False):
+  • MAE: 333.3770 ± 231.4568
+    - Mejor: 142.5562, Peor: 775.6513
+  • RMSE: 401.0213 ± 252.8421
+  • R²: -2.8755 ± 4.8403
+
+AEROLINEAS(OneHot=False) y NEWS(Aggregated):
+  • MAE: 352.6300 ± 233.8351
+    - Mejor: 145.3647, Peor: 775.6513
+  • RMSE: 433.5513 ± 264.5756
+  • R²: -3.4624 ± 4.9595
+
+AEROLINEAS(OneHot=False) y NEWS(Aggregated) y WEATHER:
+  • MAE: 329.4090 ± 238.0447
+    - Mejor: 133.9977, Peor: 775.6513
+  • RMSE: 410.9820 ± 263.1233
+  • R²: -3.0654 ± 4.9036
+
+AEROLINEAS(OneHot=False) y NEWS(OneHot):
+  • MAE: 338.3070 ± 229.6465
+    - Mejor: 143.4189, Peor: 775.6513
+  • RMSE: 410.0258 ± 250.2074
+  • R²: -2.9705 ± 4.7881
+
+AEROLINEAS(OneHot=False) y NEWS(OneHot) y WEATHER:
+  • MAE: 318.1658 ± 235.6400
+    - Mejor: 133.2815, Peor: 775.6513
+  • RMSE: 390.4553 ± 254.2733
+  • R²: -2.7659 ± 4.8543
+
+AEROLINEAS(OneHot=False) y WEATHER:
+  • MAE: 314.4231 ± 236.8924
+    - Mejor: 134.9919, Peor: 775.6513
+  • RMSE: 385.6235 ± 255.9248
+  • R²: -2.7157 ± 4.8819
+
+AEROLINEAS(OneHot=True):
+  • MAE: 307.3215 ± 242.9182
+    - Mejor: 124.1518, Peor: 775.6513
+  • RMSE: 374.5271 ± 264.3326
+  • R²: -2.6350 ± 4.9256
+
+AEROLINEAS(OneHot=True) y NEWS(Aggregated):
+  • MAE: 309.8823 ± 242.6388
+    - Mejor: 121.8539, Peor: 775.6513
+  • RMSE: 377.3325 ± 264.2588
+  • R²: -2.6706 ± 4.9173
+
+AEROLINEAS(OneHot=True) y NEWS(Aggregated) y WEATHER:
+  • MAE: 313.9008 ± 241.5373
+    - Mejor: 125.2595, Peor: 775.6513
+  • RMSE: 378.2359 ± 264.5895
+  • R²: -2.7049 ± 4.9176
+
+AEROLINEAS(OneHot=True) y NEWS(OneHot):
+  • MAE: 305.7397 ± 243.5171
+    - Mejor: 121.9678, Peor: 775.6513
+  • RMSE: 373.0997 ± 264.7923
+  • R²: -2.6423 ± 4.9257
+
+AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER:
+  • MAE: 303.5109 ± 243.6519
+    - Mejor: 124.1899, Peor: 775.6513
+  • RMSE: 371.4460 ± 265.0858
+  • R²: -2.6210 ± 4.9314
+
+AEROLINEAS(OneHot=True) y WEATHER:
+  • MAE: 304.7135 ± 243.2735
+    - Mejor: 123.7920, Peor: 775.6513
+  • RMSE: 372.9650 ± 264.9861
+  • R²: -2.6449 ± 4.9260
+
+BASELINE:
+  • MAE: 419.2771 ± 302.9253
+    - Mejor: 155.1655, Peor: 827.1352
+  • RMSE: 558.3152 ± 452.6187
+  • R²: -9.2345 ± 16.0545
+
+NEWS(Aggregated):
+  • MAE: 317.1272 ± 234.2402
+    - Mejor: 148.3803, Peor: 775.6513
+  • RMSE: 388.6992 ± 254.1196
+  • R²: -2.7246 ± 4.8714
+
+NEWS(Aggregated) y WEATHER:
+  • MAE: 322.5228 ± 233.0217
+    - Mejor: 141.8371, Peor: 775.6513
+  • RMSE: 391.3536 ± 252.7278
+  • R²: -2.7668 ± 4.8506
+
+NEWS(OneHot):
+  • MAE: 314.4939 ± 234.3518
+    - Mejor: 153.8416, Peor: 775.6513
+  • RMSE: 387.1652 ± 253.2868
+  • R²: -2.7162 ± 4.8674
+
+NEWS(OneHot) y WEATHER:
+  • MAE: 325.5794 ± 233.8985
+    - Mejor: 138.5233, Peor: 775.6513
+  • RMSE: 396.7178 ± 254.7829
+  • R²: -2.8127 ± 4.8594
+
+WEATHER:
+  • MAE: 357.0398 ± 249.7954
+    - Mejor: 140.9383, Peor: 775.6513
+  • RMSE: 449.8623 ± 297.7822
+  • R²: -4.1039 ± 5.7638
+
+🏅 RANKING DE CONFIGURACIONES (POR MAE PROMEDIO)
+----------------------------------------
+ 1. AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER: 303.5109
+ 2. AEROLINEAS(OneHot=True) y WEATHER: 304.7135
+ 3. AEROLINEAS(OneHot=True) y NEWS(OneHot): 305.7397
+ 4. AEROLINEAS(OneHot=True): 307.3215
+ 5. AEROLINEAS(OneHot=True) y NEWS(Aggregated): 309.8823
+ 6. AEROLINEAS(OneHot=True) y NEWS(Aggregated) y WEATHER: 313.9008
+ 7. AEROLINEAS(OneHot=False) y WEATHER: 314.4231
+ 8. NEWS(OneHot): 314.4939
+ 9. NEWS(Aggregated): 317.1272
+10. AEROLINEAS(OneHot=False) y NEWS(OneHot) y WEATHER: 318.1658
+11. NEWS(Aggregated) y WEATHER: 322.5228
+12. NEWS(OneHot) y WEATHER: 325.5794
+13. AEROLINEAS(OneHot=False) y NEWS(Aggregated) y WEATHER: 329.4090
+14. AEROLINEAS(OneHot=False): 333.3770
+15. AEROLINEAS(OneHot=False) y NEWS(OneHot): 338.3070
+16. AEROLINEAS(OneHot=False) y NEWS(Aggregated): 352.6300
+17. WEATHER: 357.0398
+18. BASELINE: 419.2771
+
+📊 ANÁLISIS DE MEJORA VS BASELINE
+----------------------------------------
+MAE Baseline: 419.2771
+
+Mejora relativa vs Baseline:
+  📈 AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER: +27.61%
+  📈 AEROLINEAS(OneHot=True) y WEATHER: +27.32%
+  📈 AEROLINEAS(OneHot=True) y NEWS(OneHot): +27.08%
+  📈 AEROLINEAS(OneHot=True): +26.70%
+  📈 AEROLINEAS(OneHot=True) y NEWS(Aggregated): +26.09%
+  📈 AEROLINEAS(OneHot=True) y NEWS(Aggregated) y WEATHER: +25.13%
+  📈 AEROLINEAS(OneHot=False) y WEATHER: +25.01%
+  📈 NEWS(OneHot): +24.99%
+  📈 NEWS(Aggregated): +24.36%
+  📈 AEROLINEAS(OneHot=False) y NEWS(OneHot) y WEATHER: +24.12%
+  📈 NEWS(Aggregated) y WEATHER: +23.08%
+  📈 NEWS(OneHot) y WEATHER: +22.35%
+  📈 AEROLINEAS(OneHot=False) y NEWS(Aggregated) y WEATHER: +21.43%
+  📈 AEROLINEAS(OneHot=False): +20.49%
+  📈 AEROLINEAS(OneHot=False) y NEWS(OneHot): +19.31%
+  📈 AEROLINEAS(OneHot=False) y NEWS(Aggregated): +15.90%
+  📈 WEATHER: +14.84%
+
+🎯 MODELOS MÁS CONSISTENTES (MENOR VARIABILIDAD)
+----------------------------------------
+arima: σ=0.0000 (μ=775.6513)
+prophet: σ=0.0000 (μ=330.3016)
+random_forest: σ=9.8603 (μ=137.2446)
+xgboost: σ=20.2743 (μ=150.8091)
+ensemble: σ=23.4874 (μ=232.5345)
+lstm: σ=143.4763 (μ=335.9326)
+
+🔗 CORRELACIÓN ENTRE MÉTRICAS
+----------------------------------------
+MAE vs RMSE: 0.9855
+MAE vs R²: -0.8896
+RMSE vs R²: -0.9463
+
+📝 CONCLUSIONES
+----------------------------------------
+• La mejor configuración general es: AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER
+• El modelo más consistente es: arima
+• El mejor modelo absoluto es: xgboost con AEROLINEAS(OneHot=True) y NEWS(Aggregated)
+
+💡 RECOMENDACIONES
+----------------------------------------
+• Usar AEROLINEAS(OneHot=True) y NEWS(OneHot) y WEATHER para mejores resultados vs baseline
+• Para máxima consistencia: arima
+• Para mejor rendimiento absoluto: xgboost con AEROLINEAS(OneHot=True) y NEWS(Aggregated)
+
+================================================================================
+FIN DEL RESUMEN
+================================================================================
