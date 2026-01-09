@@ -473,6 +473,10 @@ def load_and_visualize_json_results(json_file_path):
         # Crear curva de aprendizaje del mejor modelo
         create_learning_curve_plot(json_file_path)
         
+        # Generar resumen de entrenamiento
+        print("\n📝 Generando resumen de entrenamiento...")
+        generate_training_summary(df_results)
+        
         print(f"\n✅ Visualizaciones completadas para: {json_file_path}")
         
     except FileNotFoundError:
@@ -481,6 +485,177 @@ def load_and_visualize_json_results(json_file_path):
         print(f"❌ Error: El archivo {json_file_path} no contiene JSON válido")
     except Exception as e:
         print(f"❌ Error procesando resultados: {e}")
+
+
+def generate_training_summary(df, output_file='train_results/training_summary.txt'):
+    """
+    Genera un resumen detallado de los resultados de entrenamiento en un archivo TXT.
+    
+    Args:
+        df: DataFrame con los resultados de entrenamiento
+        output_file: Ruta del archivo de salida (default: 'train_results/training_summary.txt')
+    """
+    import os
+    from datetime import datetime
+    
+    # Crear directorio si no existe
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    # Obtener fecha y hora actual
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Iniciar contenido del resumen
+    summary_content = []
+    summary_content.append("=" * 80)
+    summary_content.append("RESUMEN DE RESULTADOS DE ENTRENAMIENTO")
+    summary_content.append(f"Generado: {timestamp}")
+    summary_content.append("=" * 80)
+    summary_content.append("")
+    
+    # Estadísticas generales
+    summary_content.append("📊 ESTADÍSTICAS GENERALES")
+    summary_content.append("-" * 40)
+    summary_content.append(f"Total de resultados: {len(df)}")
+    summary_content.append(f"Configuraciones evaluadas: {df['config'].nunique()}")
+    summary_content.append(f"Modelos evaluados: {df['model'].nunique()}")
+    summary_content.append(f"Modelos: {', '.join(sorted(df['model'].unique()))}")
+    summary_content.append("")
+    
+    # Mejor modelo global
+    summary_content.append("🏆 MEJOR MODELO GLOBAL")
+    summary_content.append("-" * 40)
+    best_overall = df.loc[df['mae'].idxmin()]
+    summary_content.append(f"Modelo: {best_overall['model']}")
+    summary_content.append(f"Configuración: {best_overall['config']}")
+    summary_content.append(f"MAE: {best_overall['mae']:.4f}")
+    summary_content.append(f"RMSE: {best_overall['rmse']:.4f}")
+    summary_content.append(f"R²: {best_overall['r2']:.4f}")
+    summary_content.append("")
+    
+    # Mejores modelos por configuración
+    summary_content.append("🎯 MEJORES MODELOS POR CONFIGURACIÓN")
+    summary_content.append("-" * 40)
+    best_by_config = df.loc[df.groupby('config')['mae'].idxmin()].sort_values('mae')
+    for _, row in best_by_config.iterrows():
+        summary_content.append(f"{row['config']}:")
+        summary_content.append(f"  • Modelo: {row['model']} (MAE: {row['mae']:.4f})")
+        summary_content.append(f"  • RMSE: {row['rmse']:.4f}, R²: {row['r2']:.4f}")
+        summary_content.append("")
+    
+    # Mejores modelos por tipo de modelo
+    summary_content.append("🔧 MEJORES MODELOS POR TIPO")
+    summary_content.append("-" * 40)
+    for model in sorted(df['model'].unique()):
+        best_model = df[df['model'] == model].loc[df[df['model'] == model]['mae'].idxmin()]
+        summary_content.append(f"{model}:")
+        summary_content.append(f"  • Configuración: {best_model['config']}")
+        summary_content.append(f"  • MAE: {best_model['mae']:.4f}")
+        summary_content.append(f"  • RMSE: {best_model['rmse']:.4f}, R²: {best_model['r2']:.4f}")
+        summary_content.append("")
+    
+    # Análisis por configuración (promedios)
+    summary_content.append("📈 ANÁLISIS POR CONFIGURACIÓN (PROMEDIOS)")
+    summary_content.append("-" * 40)
+    config_stats = df.groupby('config').agg({
+        'mae': ['mean', 'std', 'min', 'max'],
+        'rmse': ['mean', 'std'],
+        'r2': ['mean', 'std']
+    }).round(4)
+    
+    for config in sorted(df['config'].unique()):
+        config_data = df[df['config'] == config]
+        summary_content.append(f"{config}:")
+        summary_content.append(f"  • MAE: {config_data['mae'].mean():.4f} ± {config_data['mae'].std():.4f}")
+        summary_content.append(f"    - Mejor: {config_data['mae'].min():.4f}, Peor: {config_data['mae'].max():.4f}")
+        summary_content.append(f"  • RMSE: {config_data['rmse'].mean():.4f} ± {config_data['rmse'].std():.4f}")
+        summary_content.append(f"  • R²: {config_data['r2'].mean():.4f} ± {config_data['r2'].std():.4f}")
+        summary_content.append("")
+    
+    # Ranking de configuraciones por MAE promedio
+    summary_content.append("🏅 RANKING DE CONFIGURACIONES (POR MAE PROMEDIO)")
+    summary_content.append("-" * 40)
+    config_ranking = df.groupby('config')['mae'].mean().sort_values()
+    for i, (config, mae) in enumerate(config_ranking.items(), 1):
+        summary_content.append(f"{i:2d}. {config}: {mae:.4f}")
+    summary_content.append("")
+    
+    # Análisis de mejora vs baseline (si existe BASELINE)
+    baseline_data = df[df['config'] == 'BASELINE']
+    if not baseline_data.empty:
+        summary_content.append("📊 ANÁLISIS DE MEJORA VS BASELINE")
+        summary_content.append("-" * 40)
+        baseline_mae = baseline_data['mae'].mean()
+        summary_content.append(f"MAE Baseline: {baseline_mae:.4f}")
+        summary_content.append("")
+        
+        config_improvement = df.groupby('config')['mae'].mean().sort_values()
+        improvement_pct = ((baseline_mae - config_improvement) / baseline_mae * 100).sort_values(ascending=False)
+        
+        summary_content.append("Mejora relativa vs Baseline:")
+        for config, improvement in improvement_pct.items():
+            if config != 'BASELINE':
+                arrow = "📈" if improvement > 0 else "📉"
+                summary_content.append(f"  {arrow} {config}: {improvement:+.2f}%")
+        summary_content.append("")
+    
+    # Modelos más consistentes (menor desviación estándar en MAE)
+    summary_content.append("🎯 MODELOS MÁS CONSISTENTES (MENOR VARIABILIDAD)")
+    summary_content.append("-" * 40)
+    model_consistency = df.groupby('model')['mae'].std().sort_values()
+    for model, std in model_consistency.items():
+        mean_mae = df[df['model'] == model]['mae'].mean()
+        summary_content.append(f"{model}: σ={std:.4f} (μ={mean_mae:.4f})")
+    summary_content.append("")
+    
+    # Correlación entre métricas
+    summary_content.append("🔗 CORRELACIÓN ENTRE MÉTRICAS")
+    summary_content.append("-" * 40)
+    correlation_matrix = df[['mae', 'rmse', 'r2']].corr()
+    summary_content.append(f"MAE vs RMSE: {correlation_matrix.loc['mae', 'rmse']:.4f}")
+    summary_content.append(f"MAE vs R²: {correlation_matrix.loc['mae', 'r2']:.4f}")
+    summary_content.append(f"RMSE vs R²: {correlation_matrix.loc['rmse', 'r2']:.4f}")
+    summary_content.append("")
+    
+    # Conclusiones
+    summary_content.append("📝 CONCLUSIONES")
+    summary_content.append("-" * 40)
+    
+    best_config = df.groupby('config')['mae'].mean().idxmin()
+    most_consistent_model = df.groupby('model')['mae'].std().idxmin()
+    
+    summary_content.append(f"• La mejor configuración general es: {best_config}")
+    summary_content.append(f"• El modelo más consistente es: {most_consistent_model}")
+    summary_content.append(f"• El mejor modelo absoluto es: {best_overall['model']} con {best_overall['config']}")
+    
+    # Recomendaciones
+    summary_content.append("")
+    summary_content.append("💡 RECOMENDACIONES")
+    summary_content.append("-" * 40)
+    
+    if not baseline_data.empty:
+        best_improvement = improvement_pct.drop('BASELINE', errors='ignore').idxmax()
+        if improvement_pct[best_improvement] > 0:
+            summary_content.append(f"• Usar {best_improvement} para mejores resultados vs baseline")
+        else:
+            summary_content.append("• Ninguna configuración supera al baseline")
+    
+    summary_content.append(f"• Para máxima consistencia: {most_consistent_model}")
+    summary_content.append(f"• Para mejor rendimiento absoluto: {best_overall['model']} con {best_overall['config']}")
+    
+    summary_content.append("")
+    summary_content.append("=" * 80)
+    summary_content.append("FIN DEL RESUMEN")
+    summary_content.append("=" * 80)
+    
+    # Escribir archivo
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(summary_content))
+    
+    print(f"📄 Resumen de entrenamiento guardado en: {output_file}")
+    print(f"   - Total de líneas: {len(summary_content)}")
+    print(f"   - Mejor modelo: {best_overall['model']} (MAE: {best_overall['mae']:.4f})")
+    
+    return output_file
 
 
 def main():
