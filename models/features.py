@@ -47,18 +47,24 @@ class AircraftFeatureEngineer:
             df_featured = self._add_temporal_features(df_featured)
 
         # Features de lag
-        if feature_config.get('lag_features'):
-            df_featured = self._add_lag_features(
-                df_featured,
-                lags=feature_config['lag_features']
-            )
+        if feature_config.get('daily_lag_features') or feature_config.get('hourly_lag_features'):
+            # Determinar lags según la frecuencia de los datos
+            if hasattr(df.index, 'freq') and str(df.index.freq) == 'h':
+                lags = feature_config.get('hourly_lag_features', [1, 24, 168, 720])
+            else:
+                lags = feature_config.get('daily_lag_features', [1, 7, 14, 30])
+            
+            df_featured = self._add_lag_features(df_featured, lags)
 
         # Features móviles
-        if feature_config.get('rolling_features'):
-            df_featured = self._add_rolling_features(
-                df_featured,
-                windows=feature_config['rolling_features']
-            )
+        if feature_config.get('daily_rolling_features') or feature_config.get('hourly_rolling_features'):
+            # Determinar ventanas según la frecuencia de los datos
+            if hasattr(df.index, 'freq') and str(df.index.freq) == 'h':
+                windows = feature_config.get('hourly_rolling_features', [24, 168, 720])
+            else:
+                windows = feature_config.get('daily_rolling_features', [7, 14, 30])
+            
+            df_featured = self._add_rolling_features(df_featured, windows)
 
         # Features estacionales
         if feature_config.get('seasonal_features', True):
@@ -81,7 +87,7 @@ class AircraftFeatureEngineer:
             df_featured = self._add_news_event_features(df_featured)
 
         # Limpiar NaN generados por lags/rolling
-        df_featured = df_featured.fillna(method='bfill').fillna(method='ffill')
+        df_featured = df_featured.bfill().ffill()
 
         self.logger.info(f"Características creadas: {len(df_featured.columns)} columnas totales")
 
@@ -98,21 +104,36 @@ class AircraftFeatureEngineer:
         df['month'] = df.index.month
 
         # Día del mes
-        df['day_of_month'] = df.index.day
+        df['day'] = df.index.day
 
-        # Semana del año
-        df['week_of_year'] = df.index.isocalendar().week
+        # Hora del día (solo para datos horarios)
+        if hasattr(df.index, 'hour') and str(df.index.freq) == 'h':
+            df['hour'] = df.index.hour
+            # Features cíclicas para hora
+            df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
+            df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
 
         # Trimestre
         df['quarter'] = df.index.quarter
 
-        # Fin de semana
-        df['is_weekend'] = df.index.dayofweek.isin([5, 6]).astype(int)
+        # Semana del año
+        df['week_of_year'] = df.index.isocalendar().week
 
-        # Día laborable
-        df['is_weekday'] = (~df.index.dayofweek.isin([5, 6])).astype(int)
+        # Features cíclicas para día de la semana
+        df['day_of_week_sin'] = np.sin(2 * np.pi * df['day_of_week'] / 7)
+        df['day_of_week_cos'] = np.cos(2 * np.pi * df['day_of_week'] / 7)
 
-        self.logger.info("Features temporales añadidas")
+        # Features cíclicas para mes
+        df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
+        df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
+
+        # Es fin de semana
+        df['is_weekend'] = (df['day_of_week'] >= 5).astype(int)
+
+        # Es hora pico (solo para datos horarios)
+        if hasattr(df.index, 'hour') and str(df.index.freq) == 'h':
+            df['is_rush_hour'] = ((df['hour'] >= 7) & (df['hour'] <= 9)) | ((df['hour'] >= 17) & (df['hour'] <= 19))
+            df['is_rush_hour'] = df['is_rush_hour'].astype(int)
 
         return df
 

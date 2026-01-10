@@ -14,11 +14,14 @@ class ModelConfig:
     # Rutas de datos
     data_dir: Path = Path("data/ATC csvs")
     atc_daily_file: str = "atc_dayatcopsummary_202512301506.csv"
+    atc_hourly_file: str = "atc_houratcopsummary_202512301506.csv"
     atc_daily_acids_file: str = "atc_daylyacids_202512301506.csv"
+    atc_hourly_acids_file: str = "atc_hourlyacids_202512301506.csv"
     atfm_hourly_file: str = "atfm_hourlyaoigroupflights_202512301506.csv"
     atfm_monthly_file: str = "atfm_monthrouteflights_202512301506.csv"
     news_file: str = "eventos.json"
     meteorological_data_file: str = "daily_meteorological_data.csv"
+    hourly_meteorological_data_file: str = "hourly_meteorological_data.csv"
 
     # Configuración temporal
     date_column: str = "time"
@@ -93,8 +96,10 @@ class ModelConfig:
         if self.feature_config is None:
             self.feature_config = {
                 "temporal_features": True,
-                "lag_features": [1, 7, 14, 30],  # Lags de 1, 7, 14, 30 días
-                "rolling_features": [7, 14, 30],  # Ventanas móviles
+                "daily_lag_features": [1, 7, 14, 30],  # Lags de 1, 7, 14, 30 días
+                "hourly_lag_features": [1, 24, 168, 720],  # Lags de 1h, 1d, 1sem, 1mes
+                "daily_rolling_features": [7, 14, 30],  # Ventanas móviles diarias
+                "hourly_rolling_features": [24, 168, 720],  # Ventanas móviles horarias
                 "seasonal_features": True,
                 "holiday_features": True,
                 "covid_adjustment": True,  # Ajuste por impacto COVID

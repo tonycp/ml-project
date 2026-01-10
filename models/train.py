@@ -76,7 +76,7 @@ def create_models(config: ModelConfig) -> AircraftForecaster:
 
     return forecaster
 
-def load_data(config: ModelConfig, acids_param=None, news_param=None, weather_param=None):
+def load_data(config: ModelConfig, data_type: str = "daily", acids_param=None, news_param=None, weather_param=None):
     """
     Carga datos con diferentes combinaciones de parámetros.
     
@@ -89,29 +89,60 @@ def load_data(config: ModelConfig, acids_param=None, news_param=None, weather_pa
     Returns:
         DataFrame con datos combinados
     """
-    data_loader = ATCAircraftDataLoader(config)
-    df = data_loader.load_daily_atc_data()
+
+    if data_type == "daily":
+        data_loader = ATCAircraftDataLoader(config)
+        df = data_loader.load_daily_atc_data()
+        
+        # Cargar datos ACIDS si se especifica
+        if acids_param is not None:
+            acids = data_loader.load_daily_acids_data(use_one_hot=acids_param)
+            df = pd.merge(df, acids, left_index=True, right_index=True, how='left')
+        
+        # Cargar datos NEWS si se especifica
+        if news_param is not None:
+            news_loader = NewsDataLoader(config)
+            news = news_loader.load_news_events(feature_type=news_param)
+            df = pd.merge(df, news, left_index=True, right_index=True, how='left')
+        
+        # Cargar datos WEATHER si se especifica
+        if weather_param:
+            weather_loader = WeatherDataLoader(config)
+            weather = weather_loader.load_weather_data(
+                start_date=df.index.min().strftime('%Y-%m-%d'),
+                end_date=df.index.max().strftime('%Y-%m-%d')
+            )
+            df = pd.merge(df, weather, left_index=True, right_index=True, how='left')
     
-    # Cargar datos ACIDS si se especifica
-    if acids_param is not None:
-        acids = data_loader.load_daily_acids_data(use_one_hot=acids_param)
-        df = pd.merge(df, acids, left_index=True, right_index=True, how='left')
-    
-    # Cargar datos NEWS si se especifica
-    if news_param is not None:
-        news_loader = NewsDataLoader(config)
-        news = news_loader.load_news_events(feature_type=news_param)
-        df = pd.merge(df, news, left_index=True, right_index=True, how='left')
-    
-    # Cargar datos WEATHER si se especifica
-    if weather_param:
-        weather_loader = WeatherDataLoader(config)
-        weather = weather_loader.load_weather_data(
+    elif data_type == "hourly":
+
+        data_loader = ATCAircraftDataLoader(config)
+        df = data_loader.load_hourly_atc_data()
+
+        # Cargar datos ACIDS si se especifica
+        if acids_param:
+            acids = data_loader.load_hourly_acids_data(use_one_hot=acids_param)
+            df = pd.merge(df, acids, left_index=True, right_index=True, how='left')
+
+        # Cargar datos WEATHER si se especifica
+        if weather_param:
+            weather_loader = WeatherDataLoader(config)
+            weather = weather_loader.load_hourly_weather_data(
             start_date=df.index.min().strftime('%Y-%m-%d'),
             end_date=df.index.max().strftime('%Y-%m-%d')
-        )
-        df = pd.merge(df, weather, left_index=True, right_index=True, how='left')
-  
+            )
+            df = pd.merge(df, weather, left_index=True, right_index=True, how='left')
+
+        # Cargar datos NEWS si se especifica
+        if news_param:
+            news_loader = NewsDataLoader(config)
+            news = news_loader.load_hourly_news_events(
+                start_date=df.index.min().strftime('%Y-%m-%d'),
+                end_date=df.index.max().strftime('%Y-%m-%d'),
+                feature_type=news_param
+            )
+            df = pd.merge(df, news, left_index=True, right_index=True, how='left')
+
     return df
 
 def get_config_description(acids_param, news_param, weather_param):
@@ -137,7 +168,7 @@ def get_config_description(acids_param, news_param, weather_param):
     
     return " y ".join(parts)
 
-def run_comprehensive_training():
+def run_comprehensive_training(data_type, forecast_horizon, output_path):
     """
     Ejecuta entrenamiento con todas las combinaciones de parámetros.
     """
@@ -175,18 +206,18 @@ def run_comprehensive_training():
                 
                 try:
                     # Cargar datos con esta configuración específica
-                    df = load_data(config, acids_param, news_param, weather_param)
+                    df = load_data(config, data_type, acids_param, news_param, weather_param)
                     print(f"Datos cargados: {len(df)} registros")
                     
                     # Preprocesar
-                    preprocessor = AircraftDataPreprocessor(config)
+                    preprocessor = AircraftDataforecast_horizonPreprocessor(config)
                     df_processed = preprocessor.preprocess_daily_data(df)
                     
                     # Crear features
                     logger.info("Creando características...")
                     feature_engineer = AircraftFeatureEngineer(config)
                     df_featured = feature_engineer.create_features(df_processed)
-                    df_featured = feature_engineer.create_lagged_target(df_featured, 1)
+                    df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon)
 
                     # Preparar datos para modelado
                     X, y = feature_engineer.select_features_for_model(df_featured)
@@ -262,10 +293,10 @@ def run_comprehensive_training():
     
     # Guardar resultados detallados
     import json
-    with open('train_results/comprehensive_training_results.json', 'w', encoding='utf-8') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2, default=str)
     
-    print(f"💾 Resultados guardados en: train_results/comprehensive_training_results.json")
+    print(f"💾 Resultados guardados en: {output_path}")
 
     # Llamar a visualize_results con los datos formateados
     try:
@@ -415,9 +446,7 @@ def visualize_comprehensive_results(all_results):
     plt.tight_layout()
     plt.savefig('train_results/comprehensive_training_analysis.png', dpi=300, bbox_inches='tight')
     print(f"\n📊 Análisis guardado en: train_results/comprehensive_training_analysis.png")
-    plt.show()
-    
-    
+    plt.show() 
 
 def visualize_existing_results(results_file):
     """
@@ -461,13 +490,12 @@ def visualize_existing_results(results_file):
     except Exception as e:
         print(f"❌ Error procesando resultados: {e}")
 
-
 def main():
     """Función principal de entrenamiento."""
     parser = argparse.ArgumentParser(description="Entrenamiento de modelos de forecasting de aeronaves")
     parser.add_argument("--config", type=str, help="Archivo de configuración YAML")
-    parser.add_argument("--data-type", type=str, default="daily_atc",
-                       choices=["daily_atc", "hourly_atfm", "monthly_route"],
+    parser.add_argument("--data-type", type=str, default="daily",
+                       choices=["daily", "hourly"],
                        help="Tipo de datos a usar")
     parser.add_argument("--models", nargs="+", default=["arima", "prophet", "lstm", "random_forest", "xgboost", "ensemble"],
                        help="Modelos a entrenar")
@@ -477,13 +505,19 @@ def main():
                        help="Ejecutar entrenamiento comprehensivo con todas las combinaciones")
     parser.add_argument("--visualize-existing", type=str, 
                        help="Visualizar resultados existentes desde archivo JSON")
-    
+    parser.add_argument("--output", type=str, default="train_results/comprehensive_training_results.json",
+                       help="Archivo de salida para resultados")
+
     args = parser.parse_args()
     
     # Configurar logging
     setup_logging()
     logger = logging.getLogger(__name__)
     
+    if args.data_type not in ["daily", "hourly"]:
+        logger.error(f"Tipo de datos no válido: {args.data_type}")
+        return
+
     # Visualizar resultados existentes
     if args.visualize_existing:
         visualize_existing_results(args.visualize_existing)
@@ -492,7 +526,7 @@ def main():
     if args.comprehensive:
         # Ejecutar entrenamiento comprehensivo
         logger.info("Iniciando entrenamiento comprehensivo con todas las combinaciones")
-        run_comprehensive_training()
+        run_comprehensive_training(args.data_type, args.forecast_horizon, args.output)
         return
     
     # Código original para entrenamiento simple
@@ -505,14 +539,18 @@ def main():
         
         # Cargar y preparar datos
         logger.info("Cargando datos...")
-        df = load_data(config)
+        df = load_data(config, data_type=args.data_type)
         logger.info(f"Datos cargados: {len(df)} registros del {df.index.min()} al {df.index.max()}")
 
         # Preprocesar datos
         logger.info("Preprocesando datos...")
         preprocessor = AircraftDataPreprocessor(config)
-        df_processed = preprocessor.preprocess_daily_data(df) if args.data_type == "daily_atc" else \
-                        preprocessor.preprocess_hourly_data(df)
+        if args.data_type == "daily":
+            df_processed = preprocessor.preprocess_daily_data(df)
+        elif args.data_type == "hourly":
+            df_processed = preprocessor.preprocess_hourly_data(df)
+        else:
+            raise ValueError(f"Tipo de datos no válido: {args.data_type}")
 
         # Crear features
         logger.info("Creando características...")

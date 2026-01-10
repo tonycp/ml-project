@@ -133,7 +133,7 @@ class AircraftDataPreprocessor:
         date_range = pd.date_range(
             start=df.index.min(),
             end=df.index.max(),
-            freq='H'
+            freq='h'
         )
 
         df_reindexed = df.reindex(date_range)
@@ -143,7 +143,7 @@ class AircraftDataPreprocessor:
         df_reindexed[numeric_cols] = df_reindexed[numeric_cols].interpolate(method='linear')
 
         # Fill missing values
-        df_reindexed = df_reindexed.fillna(method='ffill').fillna(method='bfill')
+        df_reindexed = df_reindexed.ffill().bfill()
 
         self.logger.info(f"Frecuencia horaria asegurada: {len(df_reindexed)} horas (original: {len(df)})")
 
@@ -160,7 +160,7 @@ class AircraftDataPreprocessor:
         df[numeric_cols] = df[numeric_cols].interpolate(method='linear')
 
         # Para valores al inicio/final, usar forward/backward fill
-        df = df.fillna(method='ffill').fillna(method='bfill')
+        df = df.ffill().bfill()
 
         missing_after = df.isnull().sum().sum()
 

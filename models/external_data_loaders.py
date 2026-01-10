@@ -40,6 +40,7 @@ class WeatherDataLoader:
 
         # Ruta al archivo de datos meteorológicos reales
         self.meteorological_file = config.data_dir / config.meteorological_data_file
+        self.hourly_meteorological_file = config.data_dir / config.hourly_meteorological_data_file
 
     def load_weather_data(self, start_date: Optional[str] = None,
                          end_date: Optional[str] = None, use_median = False) -> pd.DataFrame:
@@ -130,6 +131,147 @@ class WeatherDataLoader:
             self.logger.error(f"Error cargando datos meteorológicos: {e}")
             self.logger.info("Generando datos sintéticos como fallback...")
             return self._generate_synthetic_weather_data(start_date, end_date)
+
+    def load_hourly_weather_data(self, start_date: Optional[str] = None,
+                                end_date: Optional[str] = None, use_median: bool = False) -> pd.DataFrame:
+        """
+        Carga datos meteorológicos horarios históricos desde el archivo real.
+
+        Args:
+            start_date: Fecha de inicio (opcional)
+            end_date: Fecha de fin (opcional)
+            use_median: Si True, usa valores medianos en lugar de promedios
+
+        Returns:
+            DataFrame con datos meteorológicos horarios
+        """
+        self.logger.info(f"Cargando datos meteorológicos horarios desde: {self.hourly_meteorological_file}")
+
+        if not self.hourly_meteorological_file.exists():
+            self.logger.warning(f"Archivo meteorológico horario no encontrado: {self.hourly_meteorological_file}")
+            self.logger.info("Generando datos sintéticos horarios como fallback...")
+            return self._generate_synthetic_hourly_weather_data(start_date, end_date)
+
+        try:
+            # Cargar datos reales
+            df = pd.read_csv(self.hourly_meteorological_file)
+            
+            # Procesar fechas
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.set_index('date').sort_index()
+
+            # Mapear columnas del archivo real a nombres estándar
+            suffix = '_median' if use_median else '_mean'
+            
+            column_mapping = {
+                f'ff_Velocidad del Viento{suffix}': 'wind_speed',
+                f'dd_Dirección del Viento{suffix}': 'wind_direction', 
+                f'T_Temperatura del Aire{suffix}': 'temperature',
+                f'HR_Humedad Relativa del Aire{suffix}': 'humidity',
+                f'P_Presión Atmosférica{suffix}': 'pressure',
+                f'R_Precipitación Acumulada{suffix}': 'precipitation',
+                f'S_Radiación Solar Global{suffix}': 'solar_radiation'
+            }
+            
+            # Verificar que todas las columnas existan
+            missing_columns = [col for col in column_mapping.keys() if col not in df.columns]
+            if missing_columns:
+                self.logger.warning(f"Columnas faltantes con {suffix}: {missing_columns}")
+                # Intentar con el otro sufijo
+                alt_suffix = '_mean' if use_median else '_median'
+                alt_mapping = {
+                    f'ff_Velocidad del Viento{alt_suffix}': 'wind_speed',
+                    f'dd_Dirección del Viento{alt_suffix}': 'wind_direction', 
+                    f'T_Temperatura del Aire{alt_suffix}': 'temperature',
+                    f'HR_Humedad Relativa del Aire{alt_suffix}': 'humidity',
+                    f'P_Presión Atmosférica{alt_suffix}': 'pressure',
+                    f'R_Precipitación Acumulada{alt_suffix}': 'precipitation',
+                    f'S_Radiación Solar Global{alt_suffix}': 'solar_radiation'
+                }
+                column_mapping = alt_mapping
+            
+            # Seleccionar y renombrar columnas
+            weather_df = df[list(column_mapping.keys())].copy()
+            weather_df.columns = list(column_mapping.values())
+            
+            # Manejar valores faltantes
+            weather_df = weather_df.ffill().bfill()
+            
+            # Calcular variables adicionales
+            weather_df['wind_speed_max'] = df.get('ff_Velocidad del Viento_hourly_max', weather_df['wind_speed'])
+            weather_df['temperature_range'] = df.get('T_Temperatura del Aire_hourly_max', weather_df['temperature']) - df.get('T_Temperatura del Aire_hourly_min', weather_df['temperature'])
+            
+            # Filtrar por rango de fechas si se especifica
+            if start_date:
+                weather_df = weather_df[weather_df.index >= start_date]
+            if end_date:
+                weather_df = weather_df[weather_df.index <= end_date]
+
+            self.logger.info(f"Datos meteorológicos horarios cargados: {len(weather_df)} registros")
+            return weather_df
+
+        except Exception as e:
+            self.logger.error(f"Error cargando datos meteorológicos horarios: {e}")
+            self.logger.info("Generando datos sintéticos horarios como fallback...")
+            return self._generate_synthetic_hourly_weather_data(start_date, end_date)
+
+    def _generate_synthetic_hourly_weather_data(self, start_date: Optional[str] = None,
+                                         end_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        Genera datos sintéticos horarios como fallback cuando no hay datos reales.
+        """
+        if start_date and end_date:
+            date_range = pd.date_range(start=start_date, end=end_date, freq='h')
+        else:
+            date_range = pd.date_range(start='2022-01-01', end='2025-12-31', freq='h')
+
+        np.random.seed(42)
+        weather_data = []
+
+        for date in date_range:
+            # Base temperature with daily and seasonal cycles
+            base_temp = 26 + 3 * np.sin(2 * np.pi * date.dayofyear / 365) + 2 * np.sin(2 * np.pi * date.hour / 24)
+            temperature = base_temp + np.random.normal(0, 1)
+            
+            # Humidity inversely related to temperature
+            humidity = 75 - 10 * np.sin(2 * np.pi * date.dayofyear / 365) - 5 * np.sin(2 * np.pi * date.hour / 24) + np.random.normal(0, 3)
+            
+            # Wind speed with daily variations
+            wind_speed = 15 + 5 * np.sin(2 * np.pi * date.hour / 24) + np.random.normal(0, 2)
+            wind_direction = np.random.uniform(0, 360)
+            
+            # Precipitation (more likely during rainy season and certain hours)
+            rainfall_season = 1 if 5 <= date.month <= 10 else 0.3
+            precip_prob = 0.2 * rainfall_season * (1 + 0.3 * np.sin(2 * np.pi * date.hour / 24))
+            precipitation = np.random.exponential(2) * rainfall_season if np.random.random() < precip_prob else 0
+            
+            # Pressure
+            pressure = 1015 + np.random.normal(0, 2)
+            
+            # Solar radiation (zero at night, peak during day)
+            if 6 <= date.hour <= 18:
+                solar_radiation = 400 * np.sin(np.pi * (date.hour - 6) / 12) + np.random.normal(0, 30)
+            else:
+                solar_radiation = np.random.exponential(10) if np.random.random() < 0.1 else 0
+
+            weather_data.append({
+                'date': date,
+                'temperature': max(15, min(35, temperature)),
+                'humidity': max(30, min(95, humidity)),
+                'wind_speed': max(0, wind_speed),
+                'wind_direction': wind_direction,
+                'precipitation': max(0, precipitation),
+                'pressure': pressure,
+                'solar_radiation': max(0, solar_radiation),
+                'wind_speed_max': wind_speed + np.random.exponential(2),
+                'temperature_range': np.random.exponential(3)  # Hourly temperature variation
+            })
+
+        df = pd.DataFrame(weather_data)
+        df = df.set_index('date').sort_index()
+        
+        self.logger.info(f"Datos meteorológicos sintéticos horarios generados: {len(df)} registros")
+        return df
 
     def _generate_synthetic_weather_data(self, start_date: Optional[str] = None,
                                        end_date: Optional[str] = None) -> pd.DataFrame:
@@ -389,6 +531,214 @@ class NewsDataLoader:
         except Exception as e:
             self.logger.error(f"Error cargando eventos: {e}")
             return pd.DataFrame()
+
+    def load_hourly_news_events(self, start_date: Optional[str] = None,
+                              end_date: Optional[str] = None,
+                              feature_type: str = 'aggregated') -> pd.DataFrame:
+        """
+        Carga eventos de noticias desde eventos.json y genera features horarias.
+
+        Args:
+            start_date: Fecha de inicio
+            end_date: Fecha de fin
+            feature_type: 'aggregated' (agregadas por hora) o 'one_hot' (one-hot por tipo)
+
+        Returns:
+            DataFrame con features de noticias por hora
+        """
+        self.logger.info(f"Cargando datos de eventos horarios desde: {self.events_file}")
+
+        if not self.events_file.exists():
+            self.logger.warning(f"Archivo de eventos no encontrado: {self.events_file}")
+            return pd.DataFrame()
+
+        try:
+            # Cargar datos JSON
+            with open(self.events_file, 'r', encoding='utf-8') as f:
+                events_data = json.load(f)
+
+            if not events_data:
+                self.logger.warning("Archivo de eventos vacío")
+                return pd.DataFrame()
+
+            # Convertir a DataFrame
+            df_events = pd.DataFrame(events_data)
+            
+            # Procesar fechas (ya vienen con timestamp)
+            df_events['fecha'] = pd.to_datetime(df_events['fecha'])
+            df_events = df_events.set_index('fecha').sort_index()
+
+            # Filtrar por rango de fechas si se especifica
+            if start_date:
+                df_events = df_events[df_events.index >= start_date]
+            if end_date:
+                df_events = df_events[df_events.index <= end_date]
+
+            # Generar features según el tipo solicitado
+            if feature_type == 'aggregated':
+                return self._create_hourly_aggregated_features(df_events)
+            elif feature_type == 'one_hot':
+                return self._create_hourly_one_hot_features(df_events)
+            else:
+                raise ValueError(f"feature_type debe ser 'aggregated' o 'one_hot', no '{feature_type}'")
+
+        except Exception as e:
+            self.logger.error(f"Error cargando eventos horarios: {e}")
+            return pd.DataFrame()
+
+    def _create_hourly_one_hot_features(self, df_events: pd.DataFrame) -> pd.DataFrame:
+        """
+        Crea features one-hot de noticias por hora.
+        
+        Propaga las noticias del día a todas las horas del mismo día.
+        """
+        # Agrupar por fecha y contar eventos
+        hourly_features = []
+        
+        # Obtener rango completo de fechas para asegurar continuidad
+        min_date = df_events.index.min()
+        max_date = df_events.index.max()
+        date_range = pd.date_range(start=min_date, end=max_date, freq='h')
+        
+        # Agrupar eventos por día (ignorando la hora)
+        daily_events = df_events.copy()
+        daily_events['date_only'] = daily_events.index.date
+        daily_grouped = daily_events.groupby('date_only')
+        
+        for date in date_range:
+            # Obtener eventos del día completo
+            date_only = date.date()
+            
+            if date_only in daily_grouped.groups:
+                day_events = daily_grouped.get_group(date_only)
+                
+                # Calcular features del día (mismas para todas las horas)
+                total_count = len(day_events)
+                positive_count = (day_events['sentimiento'] == 'positive').sum()
+                negative_count = (day_events['sentimiento'] == 'negative').sum()
+                neutral_count = (day_events['sentimiento'] == 'neutral').sum()
+                
+                # Sentimiento promedio (positive=1, neutral=0, negative=-1)
+                sentimiento_map = {'positive': 1, 'neutral': 0, 'negative': -1}
+                sentimiento_avg = day_events['sentimiento'].map(sentimiento_map).mean()
+                
+                # Confianza promedio
+                confianza_avg = day_events['confianza_sentimiento'].mean()
+                
+                # Tipos de eventos (binarios)
+                tipos_presentes = set(day_events['tipo'].values)
+                
+                hourly_features.append({
+                    'fecha': date,
+                    'news_count_total': total_count,
+                    'news_positive_count': int(positive_count),
+                    'news_negative_count': int(negative_count),
+                    'news_neutral_count': int(neutral_count),
+                    'news_sentimiento_avg': float(sentimiento_avg) if not pd.isna(sentimiento_avg) else 0.0,
+                    'news_confianza_avg': float(confianza_avg) if not pd.isna(confianza_avg) else 0.0,
+                    'news_has_cultural': int('cultural' in tipos_presentes),
+                    'news_has_deportivo': int('deportivo' in tipos_presentes),
+                    'news_has_meteorologico': int('meteorologico' in tipos_presentes),
+                    'news_has_politico': int('politico' in tipos_presentes),
+                    'news_has_economico': int('economico' in tipos_presentes),
+                    'news_has_social': int('social' in tipos_presentes),
+                    'news_has_incidente': int('incidente' in tipos_presentes),
+                    'news_has_regulacion': int('regulacion' in tipos_presentes),
+                    'news_has_otro': int('otro' in tipos_presentes)
+                })
+            else:
+                # Día sin eventos
+                hourly_features.append({
+                    'fecha': date,
+                    'news_count_total': 0,
+                    'news_positive_count': 0,
+                    'news_negative_count': 0,
+                    'news_neutral_count': 0,
+                    'news_sentimiento_avg': 0.0,
+                    'news_confianza_avg': 0.0,
+                    'news_has_cultural': 0,
+                    'news_has_deportivo': 0,
+                    'news_has_meteorologico': 0,
+                    'news_has_politico': 0,
+                    'news_has_economico': 0,
+                    'news_has_social': 0,
+                    'news_has_incidente': 0,
+                    'news_has_regulacion': 0,
+                    'news_has_otro': 0
+                })
+        
+        # Convertir a DataFrame
+        df_hourly = pd.DataFrame(hourly_features)
+        df_hourly = df_hourly.set_index('fecha').sort_index()
+        
+        self.logger.info(f"Features horarias de noticias creadas: {len(df_hourly)} registros")
+        return df_hourly
+
+    def _create_hourly_aggregated_features(self, df_events: pd.DataFrame) -> pd.DataFrame:
+        """
+        Crea features agregadas de noticias por hora.
+        
+        Propaga las noticias del día a todas las horas del mismo día.
+        """
+        # Obtener todos los tipos únicos de eventos
+        all_tipos = df_events['tipo'].unique()
+        
+        # Obtener rango completo de fechas
+        min_date = df_events.index.min()
+        max_date = df_events.index.max()
+        date_range = pd.date_range(start=min_date, end=max_date, freq='h')
+        
+        # Agrupar eventos por día (ignorando la hora)
+        daily_events = df_events.copy()
+        daily_events['date_only'] = daily_events.index.date
+        daily_grouped = daily_events.groupby('date_only')
+        
+        hourly_features = []
+        
+        for date in date_range:
+            # Obtener eventos del día completo
+            date_only = date.date()
+            
+            # Inicializar features
+            features = {
+                'fecha': date,
+                'news_count_total': 0,
+                'news_sentimiento_avg': 0.0,
+                'news_confianza_avg': 0.0
+            }
+            
+            # Agregar one-hot para cada tipo
+            for tipo in all_tipos:
+                features[f'news_tipo_{tipo}'] = 0
+            
+            if date_only in daily_grouped.groups:
+                # Obtener eventos del día
+                day_events = daily_grouped.get_group(date_only)
+                
+                # Actualizar conteo total
+                features['news_count_total'] = len(day_events)
+                
+                # Actualizar one-hot basado en eventos presentes durante el día
+                tipos_presentes = day_events['tipo'].values
+                for tipo in tipos_presentes:
+                    features[f'news_tipo_{tipo}'] = 1
+                
+                # Calcular sentimiento y confianza promedio del día
+                sentimiento_map = {'positive': 1, 'neutral': 0, 'negative': -1}
+                sentimiento_avg = day_events['sentimiento'].map(sentimiento_map).mean()
+                confianza_avg = day_events['confianza_sentimiento'].mean()
+                
+                features['news_sentimiento_avg'] = float(sentimiento_avg) if not pd.isna(sentimiento_avg) else 0.0
+                features['news_confianza_avg'] = float(confianza_avg) if not pd.isna(confianza_avg) else 0.0
+            
+            hourly_features.append(features)
+        
+        # Convertir a DataFrame
+        df_hourly = pd.DataFrame(hourly_features)
+        df_hourly = df_hourly.set_index('fecha').sort_index()
+        
+        self.logger.info(f"Features horarias one-hot de noticias creadas: {len(df_hourly)} registros")
+        return df_hourly
 
     def _create_aggregated_features(self, df_events: pd.DataFrame) -> pd.DataFrame:
         """

@@ -19,7 +19,9 @@ from models import (
     ARIMAModel,
     ProphetModel,
     RandomForestModel,
-    NewsDataLoader
+    XGBoostModel,
+    NewsDataLoader,
+    WeatherDataLoader
 )
 
 
@@ -37,80 +39,38 @@ def main():
         # 2. Carga de datos
         print("\n📊 Paso 2: Carga de datos ATC diarios")
         data_loader = ATCAircraftDataLoader(config)
-
-        # Obtener información de los datos disponibles
-        data_info = data_loader.get_data_info()
-        if 'daily_atc' in data_info and 'records' in data_info['daily_atc']:
-            records = data_info['daily_atc']['records']
-            date_range = data_info['daily_atc']['date_range']
-            print(f"✓ Datos diarios: {records} registros")
-            print(f"✓ Rango de fechas: {date_range}")
-        else:
-            print("⚠️ No se pudieron cargar datos diarios ATC")
-            return
-
-        # Cargar datos de entrenamiento
-        df = data_loader.get_training_data('daily_atc')
-        print(f"✓ Datos de entrenamiento preparados: {len(df)} registros")
-
-        # 2.1. Cargar y unir datos de ACIDs
-        print("\n🔗 Paso 2.1: Cargar y unir datos de ACIDs")
+        df = data_loader.load_hourly_atc_data()
         
-        # Opción 1: Features agregadas (recomendado para empezar)
-        df_acids = data_loader.load_daily_acids_data(use_one_hot=True)
-        
-        if not df_acids.empty:
-            print(f"✓ Datos ACIDs cargados: {len(df_acids)} registros")
-            print(f"✓ Features ACIDs: {list(df_acids.columns)}")
-            
-            # Unir datasets por fecha
-            df = pd.merge(df, df_acids, left_index=True, right_index=True, how='left')
-            print(f"✓ Datasets unidos: {len(df)} registros finales")
-            
-            # Rellenar valores faltantes para días sin datos ACIDs
-            acids_cols = df_acids.columns
-            df[acids_cols] = df[acids_cols].fillna(0)
-            print(f"✓ Valores faltantes rellenados")
-        else:
-            print("⚠️ No se pudieron cargar datos ACIDs, continuando sin ellos")
+        # acids = data_loader.load_hourly_acids_data(use_one_hot=True)
+        # df = pd.merge(df, acids, left_index=True, right_index=True, how='left')
 
-        # 2.2. Cargar y unir datos de noticias
-        print("\n📰 Paso 2.2: Cargar y unir datos de noticias")
+        weather_loader = WeatherDataLoader(config)
+        weather = weather_loader.load_hourly_weather_data(
+            start_date=df.index.min().strftime('%Y-%m-%d'),
+            end_date=df.index.max().strftime('%Y-%m-%d'),
+            use_median=False
+        )
+        df = pd.merge(df, weather, left_index=True, right_index=True, how='left')
 
-        news_loader = NewsDataLoader(config)
-        
-        # Opción A: Features agregadas (recomendado)
-        df_news = news_loader.load_news_events(feature_type='one_hot')
-        
-        # Opción B: One-hot encoding (descomentar para probar)
-        # df_news = news_loader.load_news_events(feature_type='one_hot')
-        
-        if not df_news.empty:
-            print(f"✓ Datos noticias cargados: {len(df_news)} registros")
-            print(f"✓ Features noticias: {list(df_news.columns)}")
-            
-            # Unir datasets por fecha
-            df = pd.merge(df, df_news, left_index=True, right_index=True, how='left')
-            print(f"✓ Datasets unidos con noticias: {len(df)} registros finales")
-            
-            # Rellenar valores faltantes para días sin noticias
-            news_cols = df_news.columns
-            df[news_cols] = df[news_cols].fillna(0)
-            print(f"✓ Valores faltantes de noticias rellenados")
-        else:
-            print("⚠️ No se pudieron cargar datos de noticias, continuando sin ellos")
+        # news_loader = NewsDataLoader(config)
+        # hourly_news = news_loader.load_hourly_news_events(
+        #     start_date=df.index.min().strftime('%Y-%m-%d'),
+        #     end_date=df.index.max().strftime('%Y-%m-%d'),
+        #     feature_type='aggregated'
+        # )
+        # df = pd.merge(df, hourly_news, left_index=True, right_index=True, how='left')
 
         # 3. Preprocesamiento
         print("\n🔧 Paso 3: Preprocesamiento")
         preprocessor = AircraftDataPreprocessor(config)
-        df_processed = preprocessor.preprocess_daily_data(df)
+        df_processed = preprocessor.preprocess_hourly_data(df)
         print(f"✓ Datos preprocesados: {len(df_processed)} registros")
 
         # 4. Ingeniería de características
         print("\n⚙️ Paso 4: Ingeniería de características")
         feature_engineer = AircraftFeatureEngineer(config)
         df_featured = feature_engineer.create_features(df_processed)
-        df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon=1)
+        df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon=48)
 
         # Seleccionar features para modelado
         X, y = feature_engineer.select_features_for_model(df_featured)
@@ -124,6 +84,7 @@ def main():
         forecaster.add_model(ARIMAModel(config))
         forecaster.add_model(ProphetModel(config))
         forecaster.add_model(RandomForestModel(config))
+        forecaster.add_model(XGBoostModel(config))
 
         print("✓ Modelos configurados: ARIMA, Prophet, Random Forest")
 

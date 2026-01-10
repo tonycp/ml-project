@@ -191,11 +191,18 @@ class ProphetModel(BaseForecaster):
             else:
                 # Forecast futuro
                 last_date = self.model.history['ds'].max()
+                
+                # Determinar frecuencia según los datos de entrenamiento
+                if hasattr(self.model.history['ds'], 'freq') and 'H' in str(self.model.history['ds'].freq):
+                    freq = 'H'
+                else:
+                    freq = 'D'
+                
                 future_dates = pd.DataFrame({
                     'ds': pd.date_range(
-                        start=last_date + pd.Timedelta(days=1),
+                        start=last_date + pd.Timedelta(hours=1) if freq == 'H' else pd.Timedelta(days=1),
                         periods=forecast_horizon,
-                        freq='D'
+                        freq=freq
                     )
                 })
 

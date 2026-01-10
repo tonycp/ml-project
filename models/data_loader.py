@@ -50,8 +50,8 @@ class ATCAircraftDataLoader:
         # Leer CSV
         df = pd.read_csv(file_path)
 
-        # Convertir columna de fecha
-        df[self.config.date_column] = pd.to_datetime(df[self.config.date_column])
+        # Convertir columna de fecha y eliminar timezone
+        df[self.config.date_column] = pd.to_datetime(df[self.config.date_column]).dt.tz_localize(None)
 
         # Establecer índice de fecha
         df = df.set_index(self.config.date_column).sort_index()
@@ -76,6 +76,52 @@ class ATCAircraftDataLoader:
                 raise ValueError(f"Columna target '{self.config.target_column}' no encontrada y no se puede calcular")
 
         self.logger.info(f"Datos diarios cargados: {len(df)} registros, columnas: {list(df.columns)}")
+
+        return df
+
+    def load_hourly_atc_data(self) -> pd.DataFrame:
+        """
+        Carga datos horarios de operaciones ATC.
+
+        Returns:
+            DataFrame con datos horarios de total de aeronaves
+        """
+        file_path = self.config.get_data_path(self.config.atc_hourly_file)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
+
+        self.logger.info(f"Cargando datos horarios ATC desde: {file_path}")
+
+        # Leer CSV
+        df = pd.read_csv(file_path)
+
+        # Convertir columna de fecha y eliminar timezone
+        df[self.config.date_column] = pd.to_datetime(df[self.config.date_column]).dt.tz_localize(None)
+
+        # Establecer índice de fecha
+        df = df.set_index(self.config.date_column).sort_index()
+
+        # Filtrar columnas relevantes
+        relevant_cols = [
+            'arrivals', 'departures', 'overflights', 'nationals',
+            'unknown', 'total', 'fpp'
+        ]
+        available_cols = [col for col in relevant_cols if col in df.columns]
+        df = df[available_cols]
+
+        # Verificar que la columna target existe
+        if self.config.target_column not in df.columns:
+            # Calcular total si no existe
+            if all(col in df.columns for col in ['arrivals', 'departures', 'overflights']):
+                df[self.config.target_column] = (
+                    df['arrivals'] + df['departures'] + df['overflights']
+                )
+                self.logger.info("Columna 'total' calculada como suma de arrivals + departures + overflights")
+            else:
+                raise ValueError(f"Columna target '{self.config.target_column}' no encontrada y no se puede calcular")
+
+        self.logger.info(f"Datos horarios cargados: {len(df)} registros, columnas: {list(df.columns)}")
 
         return df
 
@@ -226,7 +272,138 @@ class ATCAircraftDataLoader:
         df_features = df_features.set_index(self.config.date_column).sort_index()
         
         return df_features
+
+    def load_hourly_acids_data(self, use_one_hot: bool = False) -> pd.DataFrame:
+        """
+        Carga y transforma los datos de `hourly_acids` en features numéricas.
+
+        Args:
+            use_one_hot: Si True, crea one-hot encoding de aerolíneas
+
+        Returns:
+            pd.DataFrame: Un DataFrame con la fecha como índice y las nuevas
+                          features de aerolíneas.
+        """
+        file_path = self.config.get_data_path(self.config.atc_hourly_acids_file)
+        if not file_path.exists():
+            self.logger.warning(f"Archivo de ACIDs horarios no encontrado en: {file_path}. Saltando carga.")
+            return pd.DataFrame()
+
+        self.logger.info(f"Cargando datos horarios ACIDs desde: {file_path}")
+        df_raw = pd.read_csv(file_path)
+
+        if df_raw.empty:
+            self.logger.warning("El archivo de ACIDs horarios está vacío.")
+            return pd.DataFrame()
+
+        # Transformar los datos crudos en features
+        if use_one_hot:
+            df_features = self._create_hourly_airline_one_hot_features(df_raw)
+        else:
+            df_features = self._create_hourly_airline_features(df_raw)
+
+        self.logger.info(f"Features de aerolíneas horarias creadas: {len(df_features)} registros, {len(df_features.columns)} columnas.")
+        return df_features
+
+    def _create_hourly_airline_features(self, df_raw: pd.DataFrame) -> pd.DataFrame:
+        """Crea features numéricas a partir de la composición de aerolíneas horarias."""
+        major_us = {'AAL', 'UAL', 'DAL', 'SWA', 'NKS'}
+        major_eu = {'IBE', 'AFR', 'BAW', 'KLM', 'DLH', 'CFG'}
+        major_cargo = {'UPS', 'FDX', 'GTI', 'ABX'}
+
+        feature_rows = []
+        for _, row in df_raw.iterrows():
+            flight_ids_list = self._safe_parse_list(row.get('flight_ids', '[]'))
+            if not flight_ids_list:
+                continue
+
+            airlines = [self._extract_airline_code(fid) for fid in flight_ids_list]
+            total_flights = len(airlines)
+            
+            airline_counts = pd.Series(airlines).value_counts()
+            unique_airlines = set(airline_counts.index)
+
+            # Calcular conteos y porcentajes
+            us_flights = sum(airline_counts.get(c, 0) for c in major_us)
+            eu_flights = sum(airline_counts.get(c, 0) for c in major_eu)
+            cargo_flights = sum(airline_counts.get(c, 0) for c in major_cargo)
+            private_flights = airline_counts.get('PRIVATE', 0)
+
+            # Crear timestamp combinando date y hour
+            date_str = row['date']
+            hour = int(row['hour'])
+            timestamp = pd.to_datetime(f"{date_str} {hour:02d}:00:00")
+
+            feature_rows.append({
+                'time': timestamp,
+                'num_unique_airlines': len(unique_airlines),
+                'pct_us_major': us_flights / total_flights,
+                'pct_eu_major': eu_flights / total_flights,
+                'pct_cargo_major': cargo_flights / total_flights,
+                'pct_private': private_flights / total_flights,
+                'top_airline_pct': airline_counts.iloc[0] / total_flights if not airline_counts.empty else 0
+            })
+
+        if not feature_rows:
+            return pd.DataFrame()
+
+        df_features = pd.DataFrame(feature_rows)
+        df_features[self.config.date_column] = pd.to_datetime(df_features[self.config.date_column])
+        df_features = df_features.set_index(self.config.date_column).sort_index()
         
+        return df_features
+    
+    def _create_hourly_airline_one_hot_features(self, df_raw: pd.DataFrame) -> pd.DataFrame:
+        """
+        Crea conteo de vuelos por aerolínea a partir de la columna flight_ids.
+        
+        Cuenta cuántos vuelos tiene cada aerolínea cada hora.
+        """
+        # Obtener el conjunto de todas las aerolíneas
+        all_airlines = set()
+        for flight_ids_string in df_raw['flight_ids']:
+            flight_ids_list = self._safe_parse_list(flight_ids_string)
+            airlines_list = [self._extract_airline_code(fid) for fid in flight_ids_list]
+            airlines_list = [air for air in airlines_list if len(air) == 3] 
+            all_airlines.update(airlines_list)
+        
+        # Convertir a lista ordenada para consistencia
+        all_airlines = sorted(list(all_airlines))
+        
+        self.logger.info(f"Creando conteo de vuelos horarios para {len(all_airlines)} aerolíneas únicas")
+        
+        # Crear DataFrame con conteo de vuelos por aerolínea
+        feature_rows = []
+        for _, row in df_raw.iterrows():
+            flight_ids_list = self._safe_parse_list(row.get('flight_ids', '[]'))
+            airlines_list = [self._extract_airline_code(fid) for fid in flight_ids_list]
+            airlines_list = [air for air in airlines_list if len(air) == 3]
+            
+            # Contar vuelos por aerolínea
+            airline_counts = pd.Series(airlines_list).value_counts()
+            
+            # Crear timestamp combinando date y hour
+            date_str = row['date']
+            hour = int(row['hour'])
+            timestamp = pd.to_datetime(f"{date_str} {hour:02d}:00:00")
+            
+            # Crear diccionario con conteo de vuelos
+            row_features = {
+                'time': timestamp,
+                **{f'airline_{airline}': airline_counts.get(airline, 0) 
+                  for airline in all_airlines}
+            }
+            feature_rows.append(row_features)
+        
+        if not feature_rows:
+            return pd.DataFrame()
+        
+        df_features = pd.DataFrame(feature_rows)
+        df_features[self.config.date_column] = pd.to_datetime(df_features[self.config.date_column])
+        df_features = df_features.set_index(self.config.date_column).sort_index()
+        
+        return df_features
+
     def load_hourly_atfm_data(self) -> pd.DataFrame:
         """
         Carga datos horarios ATFM agrupados por área.
@@ -287,8 +464,8 @@ class ATCAircraftDataLoader:
         # Leer CSV
         df = pd.read_csv(file_path)
 
-        # Convertir columna de fecha
-        df[self.config.date_column] = pd.to_datetime(df[self.config.date_column])
+        # Convertir columna de fecha y eliminar timezone
+        df[self.config.date_column] = pd.to_datetime(df[self.config.date_column]).dt.tz_localize(None)
 
         # Pivot para tener rutas como columnas
         monthly_data = df.pivot(
@@ -319,9 +496,19 @@ class ATCAircraftDataLoader:
             self.logger.warning(f"Error cargando datos diarios ATC: {e}")
 
         try:
+            data['hourly_atc'] = self.load_hourly_atc_data()
+        except Exception as e:
+            self.logger.warning(f"Error cargando datos horarios ATC: {e}")
+
+        try:
             data['daily_acids'] = self.load_daily_acids_data()
         except Exception as e:
             self.logger.warning(f"Error cargando datos diarios ACIDs: {e}")
+
+        try:
+            data['hourly_acids'] = self.load_hourly_acids_data()
+        except Exception as e:
+            self.logger.warning(f"Error cargando datos horarios ACIDs: {e}")
 
         try:
             data['hourly_atfm'] = self.load_hourly_atfm_data()
@@ -343,7 +530,7 @@ class ATCAircraftDataLoader:
         Obtiene datos de entrenamiento para un tipo específico.
 
         Args:
-            data_type: Tipo de datos ('daily_atc', 'daily_acids', 'hourly_atfm', 'monthly_route')
+            data_type: Tipo de datos ('daily_atc', 'hourly_atc', 'daily_acids', 'hourly_acids', 'hourly_atfm', 'monthly_route')
             start_date: Fecha de inicio (opcional)
             end_date: Fecha de fin (opcional)
 
@@ -353,8 +540,12 @@ class ATCAircraftDataLoader:
         # Cargar datos según tipo
         if data_type == 'daily_atc':
             df = self.load_daily_atc_data()
+        elif data_type == 'hourly_atc':
+            df = self.load_hourly_atc_data()
         elif data_type == 'daily_acids':
             df = self.load_daily_acids_data()
+        elif data_type == 'hourly_acids':
+            df = self.load_hourly_acids_data()
         elif data_type == 'hourly_atfm':
             df = self.load_hourly_atfm_data()
         elif data_type == 'monthly_route':
@@ -463,6 +654,22 @@ class ATCAircraftDataLoader:
             info['daily_atc'] = {'error': str(e)}
 
         try:
+            hourly_df = self.load_hourly_atc_data()
+            info['hourly_atc'] = {
+                'records': len(hourly_df),
+                'date_range': f"{hourly_df.index.min()} to {hourly_df.index.max()}",
+                'columns': list(hourly_df.columns),
+                'target_stats': {
+                    'mean': hourly_df[self.config.target_column].mean(),
+                    'std': hourly_df[self.config.target_column].std(),
+                    'min': hourly_df[self.config.target_column].min(),
+                    'max': hourly_df[self.config.target_column].max()
+                }
+            }
+        except Exception as e:
+            info['hourly_atc'] = {'error': str(e)}
+
+        try:
             daily_acids_df = self.load_daily_acids_data()
             info['daily_acids'] = {
                 'records': len(daily_acids_df),
@@ -477,6 +684,22 @@ class ATCAircraftDataLoader:
             }
         except Exception as e:
             info['daily_acids'] = {'error': str(e)}
+
+        try:
+            hourly_acids_df = self.load_hourly_acids_data()
+            info['hourly_acids'] = {
+                'records': len(hourly_acids_df),
+                'date_range': f"{hourly_acids_df.index.min()} to {hourly_acids_df.index.max()}",
+                'columns': list(hourly_acids_df.columns),
+                'target_stats': {
+                    'mean': hourly_acids_df[self.config.target_column].mean(),
+                    'std': hourly_acids_df[self.config.target_column].std(),
+                    'min': hourly_acids_df[self.config.target_column].min(),
+                    'max': hourly_acids_df[self.config.target_column].max()
+                }
+            }
+        except Exception as e:
+            info['hourly_acids'] = {'error': str(e)}
 
         try:
             hourly_df = self.load_hourly_atfm_data()
