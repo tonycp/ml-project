@@ -60,19 +60,19 @@ def create_models(config: ModelConfig) -> AircraftForecaster:
     except ImportError:
         logging.warning("TensorFlow no disponible, omitiendo modelo LSTM")
 
-    # Crear ensemble
-    ensemble = EnsembleModel(config)
-    ensemble.add_model(ARIMAModel(config), weight=config.models['ensemble']['weights'].get('arima', 0.20))
-    ensemble.add_model(ProphetModel(config), weight=config.models['ensemble']['weights'].get('prophet', 0.20))
-    ensemble.add_model(RandomForestModel(config), weight=config.models['ensemble']['weights'].get('random_forest', 0.20))
-    ensemble.add_model(XGBoostModel(config), weight=config.models['ensemble']['weights'].get('xgboost', 0.20))
+    # # Crear ensemble
+    # ensemble = EnsembleModel(config)
+    # ensemble.add_model(ARIMAModel(config), weight=config.models['ensemble']['weights'].get('arima', 0.20))
+    # ensemble.add_model(ProphetModel(config), weight=config.models['ensemble']['weights'].get('prophet', 0.20))
+    # ensemble.add_model(RandomForestModel(config), weight=config.models['ensemble']['weights'].get('random_forest', 0.20))
+    # ensemble.add_model(XGBoostModel(config), weight=config.models['ensemble']['weights'].get('xgboost', 0.20))
 
-    try:
-        ensemble.add_model(LSTMModel(config), weight=config.models['ensemble']['weights'].get('lstm', 0.20))
-    except ImportError:
-        pass
+    # try:
+    #     ensemble.add_model(LSTMModel(config), weight=config.models['ensemble']['weights'].get('lstm', 0.20))
+    # except ImportError:
+    #     pass
 
-    forecaster.add_model(ensemble)
+    # forecaster.add_model(ensemble)
 
     return forecaster
 
@@ -258,6 +258,9 @@ def run_comprehensive_training(data_type, forecast_horizon, output_path):
                         'learning_curve': learning_curve_data  # Agregar curva de aprendizaje
                     }
                     
+                    with open( "train_results/" + config_desc + ".json" , 'w', encoding='utf-8') as f:
+                        json.dump(result_entry, f, ensure_ascii=False, indent=2, default=str)
+
                     all_results.append(result_entry)
                     
                     print(f"✅ Mejor modelo: {best_result['model_info']['name']} (MAE: {best_result['metrics']['mae']:.2f})")

@@ -491,35 +491,60 @@ def plot_best_model_learning_diagnostics(study, forecast_horizon: int = 7):
 
     ax_curve = axes[0][1]
     if final_train_idx is not None and final_val_pred is not None and final_val_features is not None:
-        train_sizes = np.linspace(0.3, 1.0, 25)
-        train_sample_counts = []
+        # Calcular tamaños de entrenamiento (30% a 100% del conjunto de entrenamiento)
+        min_train_size = max(25, int(len(final_train_idx) * 0.3))  # Mínimo 25 muestras o 30%
+        max_train_size = len(final_train_idx)
+        train_sizes = np.linspace(min_train_size, max_train_size, 20, dtype=int)
+        
         train_curve_mae = []
         val_curve_mae = []
 
-        for frac in train_sizes:
-            subset_len = max(25, int(len(final_train_idx) * frac))
-            subset_idx = final_train_idx[:subset_len]
+        print(f"Generando curva de aprendizaje con {len(train_sizes)} puntos...")
+        for i, train_size in enumerate(train_sizes):
+            # Usar los primeros 'train_size' samples del conjunto de entrenamiento
+            subset_idx = final_train_idx[:train_size]
             X_subset = X_model.iloc[subset_idx]
             y_subset = y_model.iloc[subset_idx]
 
+            # Entrenar modelo con este subset
             model = RandomForestRegressor(**rf_params)
             model.fit(X_subset, y_subset)
 
+            # Calcular MAE en entrenamiento y validación
             train_pred_subset = model.predict(X_subset)
             val_pred_subset = model.predict(final_val_features)
 
-            train_curve_mae.append(mean_absolute_error(y_subset, train_pred_subset))
-            val_curve_mae.append(mean_absolute_error(final_val_target.values, val_pred_subset))
-            train_sample_counts.append(len(subset_idx))
+            train_mae = mean_absolute_error(y_subset, train_pred_subset)
+            val_mae = mean_absolute_error(final_val_target.values, val_pred_subset)
+            
+            train_curve_mae.append(train_mae)
+            val_curve_mae.append(val_mae)
 
-        sns.lineplot(x=train_sample_counts, y=train_curve_mae, marker='o', ax=ax_curve, label='MAE entrenamiento', color='#1f77b4')
-        sns.lineplot(x=train_sample_counts, y=val_curve_mae, marker='o', ax=ax_curve, label='MAE validación', color='#ff7f0e')
-        ax_curve.set_title('Curva de aprendizaje (tamaño de entrenamiento)', weight='bold')
-        ax_curve.set_xlabel('Muestras utilizadas para entrenar')
+        # Graficar curva de aprendizaje
+        sns.lineplot(x=train_sizes, y=train_curve_mae, marker='o', ax=ax_curve, 
+                    label='MAE entrenamiento', color='#1f77b4', linewidth=2)
+        sns.lineplot(x=train_sizes, y=val_curve_mae, marker='o', ax=ax_curve, 
+                    label='MAE validación', color='#ff7f0e', linewidth=2)
+        
+        ax_curve.set_title('Curva de Aprendizaje', weight='bold')
+        ax_curve.set_xlabel('Tamaño del conjunto de entrenamiento')
         ax_curve.set_ylabel('MAE')
         ax_curve.set_yscale('log')
         ax_curve.yaxis.set_major_formatter(FuncFormatter(lambda y_val, _: f"{y_val:.0f}"))
         ax_curve.legend()
+        ax_curve.grid(True, alpha=0.3)
+        
+        # Añadir anotaciones clave
+        final_train_mae = train_curve_mae[-1]
+        final_val_mae = val_curve_mae[-1]
+        overfitting_ratio = final_val_mae / final_train_mae if final_train_mae > 0 else float('inf')
+        
+        ax_curve.annotate(f'Mejor MAE\\nEnt: {final_train_mae:.1f}\\nVal: {final_val_mae:.1f}\\nRatio: {overfitting_ratio:.2f}',
+                         xy=(train_sizes[-1], final_val_mae), 
+                         xytext=(train_sizes[-1]*0.7, final_val_mae * 1.5),
+                         arrowprops=dict(arrowstyle='->', color='red', alpha=0.7),
+                         fontsize=9, ha='center',
+                         bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
     else:
         ax_curve.axis('off')
         ax_curve.text(0.5, 0.5, 'No se pudo estimar la curva de aprendizaje', ha='center', va='center')
