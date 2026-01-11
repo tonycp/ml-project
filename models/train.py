@@ -210,8 +210,9 @@ def run_comprehensive_training(data_type, forecast_horizon, output_path):
                     print(f"Datos cargados: {len(df)} registros")
                     
                     # Preprocesar
-                    preprocessor = AircraftDataforecast_horizonPreprocessor(config)
-                    df_processed = preprocessor.preprocess_daily_data(df)
+                    preprocessor = AircraftDataPreprocessor(config)
+ 
+                    df_processed = preprocessor.preprocess_daily_data(df) if data_type == "daily" else preprocessor.preprocess_hourly_data(df)
                     
                     # Crear features
                     logger.info("Creando características...")

@@ -70,7 +70,7 @@ def main():
         print("\n⚙️ Paso 4: Ingeniería de características")
         feature_engineer = AircraftFeatureEngineer(config)
         df_featured = feature_engineer.create_features(df_processed)
-        df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon=48)
+        df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon=1)
 
         # Seleccionar features para modelado
         X, y = feature_engineer.select_features_for_model(df_featured)

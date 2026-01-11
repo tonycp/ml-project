@@ -164,13 +164,13 @@ class WeatherDataLoader:
             suffix = '_median' if use_median else '_mean'
             
             column_mapping = {
-                f'ff_Velocidad del Viento{suffix}': 'wind_speed',
-                f'dd_Dirección del Viento{suffix}': 'wind_direction', 
-                f'T_Temperatura del Aire{suffix}': 'temperature',
-                f'HR_Humedad Relativa del Aire{suffix}': 'humidity',
-                f'P_Presión Atmosférica{suffix}': 'pressure',
-                f'R_Precipitación Acumulada{suffix}': 'precipitation',
-                f'S_Radiación Solar Global{suffix}': 'solar_radiation'
+                f'ff_Velocidad del Viento_hourly{suffix}': 'wind_speed',
+                f'dd_Dirección del Viento_hourly{suffix}': 'wind_direction', 
+                f'T_Temperatura del Aire_hourly{suffix}': 'temperature',
+                f'HR_Humedad Relativa del Aire_hourly{suffix}': 'humidity',
+                f'P_Presión Atmosférica_hourly{suffix}': 'pressure',
+                f'R_Precipitación Acumulada_hourly{suffix}': 'precipitation',
+                f'S_Radiación Solar Global_hourly{suffix}': 'solar_radiation'
             }
             
             # Verificar que todas las columnas existan
