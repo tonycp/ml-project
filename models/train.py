@@ -204,83 +204,66 @@ def run_comprehensive_training(data_type, forecast_horizon, output_path):
                 print(f"\n[{current_combination}/{total_combinations}] Configuración: {config_desc}")
                 print("-" * 50)
                 
+                # Cargar datos con esta configuración específica
+                df = load_data(config, data_type, acids_param, news_param, weather_param)
+                print(f"Datos cargados: {len(df)} registros")
+                
+                # Preprocesar
+                preprocessor = AircraftDataPreprocessor(config)
+
+                df_processed = preprocessor.preprocess_daily_data(df) if data_type == "daily" else preprocessor.preprocess_hourly_data(df)
+                
+                # Crear features
+                logger.info("Creando características...")
+                feature_engineer = AircraftFeatureEngineer(config)
+                df_featured = feature_engineer.create_features(df_processed)
+                df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon)
+
+                # Preparar datos para modelado
+                X, y = feature_engineer.select_features_for_model(df_featured)
+
+                # Crear y entrenar modelos
+                forecaster = create_models(config)
+                training_results = forecaster.train_all_models(X, y)
+                
+                # Extraer mejores resultados
+                successful_results = [r for r in training_results.values() if r.get('success', False)]
+                if not successful_results:
+                    raise Exception("No se pudo entrenar ningún modelo exitosamente")
+                
+                best_result = min(successful_results, key=lambda x: x['metrics']['mae'])
+                best_model_name = best_result['model_info']['name']
+                
+                # Generar curva de aprendizaje del mejor modelo
+                print(f"📈 Generando curva de aprendizaje para {best_model_name}...")
                 try:
-                    # Cargar datos con esta configuración específica
-                    df = load_data(config, data_type, acids_param, news_param, weather_param)
-                    print(f"Datos cargados: {len(df)} registros")
-                    
-                    # Preprocesar
-                    preprocessor = AircraftDataPreprocessor(config)
- 
-                    df_processed = preprocessor.preprocess_daily_data(df) if data_type == "daily" else preprocessor.preprocess_hourly_data(df)
-                    
-                    # Crear features
-                    logger.info("Creando características...")
-                    feature_engineer = AircraftFeatureEngineer(config)
-                    df_featured = feature_engineer.create_features(df_processed)
-                    df_featured = feature_engineer.create_lagged_target(df_featured, forecast_horizon)
-
-                    # Preparar datos para modelado
-                    X, y = feature_engineer.select_features_for_model(df_featured)
- 
-                    # Crear y entrenar modelos
-                    forecaster = create_models(config)
-                    training_results = forecaster.train_all_models(X, y)
-                    
-                    # Extraer mejores resultados
-                    successful_results = [r for r in training_results.values() if r.get('success', False)]
-                    if not successful_results:
-                        raise Exception("No se pudo entrenar ningún modelo exitosamente")
-                    
-                    best_result = min(successful_results, key=lambda x: x['metrics']['mae'])
-                    best_model_name = best_result['model_info']['name']
-                    
-                    # Generar curva de aprendizaje del mejor modelo
-                    print(f"📈 Generando curva de aprendizaje para {best_model_name}...")
-                    try:
-                        learning_curve_data = forecaster.generate_learning_curve(best_model_name, X, y)
-                        print(f"✅ Curva de aprendizaje generada para {best_model_name}")
-                    except Exception as e:
-                        print(f"⚠️ No se pudo generar curva de aprendizaje: {e}")
-                        learning_curve_data = None
-                    
-                    # Guardar resultado
-                    result_entry = {
-                        'config': config_desc,
-                        'acids_param': acids_param,
-                        'news_param': news_param, 
-                        'weather_param': weather_param,
-                        'best_model': best_result['model_info']['name'],
-                        'best_mae': best_result['metrics']['mae'],
-                        'best_rmse': best_result['metrics']['rmse'],
-                        'best_r2': best_result['metrics']['r2'],
-                        'all_results': training_results,
-                        'learning_curve': learning_curve_data  # Agregar curva de aprendizaje
-                    }
-                    
-                    with open( "train_results/" + config_desc + ".json" , 'w', encoding='utf-8') as f:
-                        json.dump(result_entry, f, ensure_ascii=False, indent=2, default=str)
-
-                    all_results.append(result_entry)
-                    
-                    print(f"✅ Mejor modelo: {best_result['model_info']['name']} (MAE: {best_result['metrics']['mae']:.2f})")
-                    
+                    learning_curve_data = forecaster.generate_learning_curve(best_model_name, X, y)
+                    print(f"✅ Curva de aprendizaje generada para {best_model_name}")
                 except Exception as e:
-                    print(f"❌ Error en configuración {config_desc}: {e}")
-                    # Añadir entrada con valores nulos para failed configs
-                    result_entry = {
-                        'config': config_desc,
-                        'acids_param': acids_param,
-                        'news_param': news_param,
-                        'weather_param': weather_param,
-                        'best_model': 'ERROR',
-                        'best_mae': float('inf'),
-                        'best_rmse': float('inf'),
-                        'best_r2': float('-inf'),
-                        'all_results': []
-                    }
-                    all_results.append(result_entry)
-    
+                    print(f"⚠️ No se pudo generar curva de aprendizaje: {e}")
+                    learning_curve_data = None
+                
+                # Guardar resultado
+                result_entry = {
+                    'config': config_desc,
+                    'acids_param': acids_param,
+                    'news_param': news_param, 
+                    'weather_param': weather_param,
+                    'best_model': best_result['model_info']['name'],
+                    'best_mae': best_result['metrics']['mae'],
+                    'best_rmse': best_result['metrics']['rmse'],
+                    'best_r2': best_result['metrics']['r2'],
+                    'all_results': training_results,
+                    'learning_curve': learning_curve_data  # Agregar curva de aprendizaje
+                }
+                
+                with open( "train_results/" + config_desc + ".json" , 'w', encoding='utf-8') as f:
+                    json.dump(result_entry, f, ensure_ascii=False, indent=2, default=str)
+
+                all_results.append(result_entry)
+                
+                print(f"✅ Mejor modelo: {best_result['model_info']['name']} (MAE: {best_result['metrics']['mae']:.2f})")
+                    
     # Analizar y visualizar resultados
     print("\n" + "="*80)
     print("ANÁLISIS DE RESULTADOS")
@@ -296,7 +279,6 @@ def run_comprehensive_training(data_type, forecast_horizon, output_path):
             print(f"    Modelo: {result['best_model']} | MAE: {result['best_mae']:.2f} | RMSE: {result['best_rmse']:.2f} | R²: {result['best_r2']:.3f}")
     
     # Guardar resultados detallados
-    import json
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2, default=str)
     
@@ -459,8 +441,6 @@ def visualize_existing_results(results_file):
     Args:
         results_file: Ruta al archivo JSON con resultados
     """
-    import json
-    
     try:
         # Cargar resultados desde archivo
         with open(results_file, 'r', encoding='utf-8') as f:
@@ -612,7 +592,6 @@ def main():
                 'best_model': best_model[0] if successful_models else None
             }
             
-            import json
             try:
                 with results_file.open('w') as f:
                     json.dump(results_data, f, ensure_ascii=False, indent=2, default=str)
